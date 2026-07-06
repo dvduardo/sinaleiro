@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+out/
+saves/
+
+# web (gerados)
+web/node_modules/
+web/dist/
+web/public/py/
+web/public/map/
