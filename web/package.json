@@ -1,0 +1,23 @@
+{
+  "name": "sinaleiro-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "prepare-assets": "node scripts/build-py-bundle.mjs && node scripts/prepare-map.mjs",
+    "predev": "npm run prepare-assets",
+    "dev": "vite",
+    "prebuild": "npm run prepare-assets",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "presmoke": "node scripts/build-py-bundle.mjs",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "fflate": "^0.8.2",
+    "pyodide": "^0.27.7",
+    "sharp": "^0.34.2",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.2"
+  }
+}
