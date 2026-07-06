@@ -161,6 +161,7 @@
 @media (prefers-reduced-motion: reduce) { .jpin.on .jring { animation: none; } }
 
 .stamk rect { fill: #101418; stroke: var(--sta); stroke-width: 1.6; }
+.stamk.lbl-off text { display: none; }
 .stamk text {
   font-family: var(--mono);
   font-size: 11px;

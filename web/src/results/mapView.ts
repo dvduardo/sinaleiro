@@ -13,6 +13,13 @@ const MAX_SCALE = 0.2;
 let viewport: HTMLElement;
 let svg: SVGSVGElement;
 let markers: SVGGElement[] = [];
+// labels de estação para o declutter: posição em coordenadas de mapa e
+// largura estimada do texto em px de tela (fonte mono → largura ∝ nº de chars)
+let stationLabels: { el: SVGGElement; x: number; y: number; w: number }[] = [];
+// pinos de junção como obstáculos: sempre visíveis e desenhados por cima,
+// então um nome de estação embaixo deles seria ilegível
+let pinBoxes: { x: number; y: number; w: number }[] = [];
+let labelScale = -1;
 let scale = 1, originX = 0, originY = 0, minScale = 0.001;
 let focus: [number, number, number, number] = [0, 0, MAP_SIZE, MAP_SIZE];
 let pinHandler: ((label: string) => void) | null = null;
@@ -58,6 +65,9 @@ export function renderMap(payload: AnalysisPayload): void {
   const pins = layer("pins");
   for (const g of [tracks, flow, stations, existing, pins]) g.innerHTML = "";
   markers = [];
+  stationLabels = [];
+  pinBoxes = [];
+  labelScale = -1;
 
   // trilhos — path bezier direto dos pontos-chave do spline
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -92,11 +102,15 @@ export function renderMap(payload: AnalysisPayload): void {
       `<polygon points="5,0 -3.5,-3.5 -3.5,3.5" transform="rotate(${deg.toFixed(0)})"/>`));
   }
 
-  // estações
+  // estações — o <title> garante o nome no hover mesmo com o label ocultado
+  // pelo declutter
   for (const s of payload.stations) {
-    stations.appendChild(marker(mapX(s.x), mapY(s.y), "mk stamk",
+    const mk = marker(mapX(s.x), mapY(s.y), "mk stamk",
       `<rect x="-8" y="-8" width="16" height="16" rx="3"/>` +
-      `<text x="13" y="4">${escapeXml(s.name)}</text>`));
+      `<text x="13" y="4">${escapeXml(s.name)}</text>` +
+      `<title>${escapeXml(s.name)}</title>`);
+    stationLabels.push({ el: mk, x: mapX(s.x), y: mapY(s.y), w: 13 + s.name.length * 6.7 });
+    stations.appendChild(mk);
   }
 
   // sinais já existentes no save
@@ -117,6 +131,7 @@ export function renderMap(payload: AnalysisPayload): void {
       pinHandler?.(j.label);
     });
     pins.appendChild(mk);
+    pinBoxes.push({ x: mapX(j.x), y: mapY(j.y), w: 12 + (j.label.length + (warn ? 2 : 0)) * 6.7 });
   }
 
   fit();
@@ -157,6 +172,30 @@ function apply(): void {
   for (const m of markers) m.setAttribute("transform", `scale(${inv})`);
   svg.style.setProperty("--tw", `${3.5 * inv}px`);
   svg.style.setProperty("--gw", `${9 * inv}px`);
+  declutterStations();
+}
+
+/** Oculta nomes de estação que colidiriam na tela — com outros nomes ou com
+ * pinos de junção (sempre visíveis, desenhados por cima). Como os marcadores
+ * têm tamanho constante na tela, a colisão só depende do zoom — não do pan —
+ * então o greedy roda apenas quando o scale muda. Ordem do payload = ordem
+ * de prioridade estável (labels não piscam entre zooms); os ocultados mantêm
+ * o quadrado e o nome no hover. */
+function declutterStations(): void {
+  if (scale === labelScale) return;
+  labelScale = scale;
+  // caixa do pino = círculo visível (r=9) + rótulo "Jn"; o anel r=17 só
+  // aparece na seleção e pode sobrepor um nome momentaneamente
+  const placed = pinBoxes.map((p) => ({
+    x0: p.x * scale - 11, y0: p.y * scale - 11, x1: p.x * scale + p.w, y1: p.y * scale + 11,
+  }));
+  for (const s of stationLabels) {
+    const sx = s.x * scale, sy = s.y * scale;
+    const box = { x0: sx - 10, y0: sy - 11, x1: sx + s.w + 4, y1: sy + 11 };
+    const hit = placed.some((p) => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0);
+    s.el.classList.toggle("lbl-off", hit);
+    if (!hit) placed.push(box);
+  }
 }
 
 function fit(): void {
