@@ -4,6 +4,7 @@ import type { ErrorCode } from "../worker/protocol";
 
 export interface LandingCallbacks {
   onAnalyze: (file: File, mode: Mode) => void;
+  onDemo: (mode: Mode) => void;
 }
 
 const MODE_NOTES: Record<Mode, string> = {
@@ -57,6 +58,7 @@ export function mountLanding(root: HTMLElement, cb: LandingCallbacks): void {
       </div>
       <p class="mode-note" id="modeNote">${MODE_NOTES.bidirectional}</p>
       <button type="button" class="cta" id="cta" disabled>Analisar malha ▸</button>
+      <button type="button" class="demo-link" id="demoBtn">sem um save à mão? veja uma malha de demonstração ▸</button>
       <p class="privacy"><b>Privacidade:</b> a análise roda inteira no seu navegador — o save nunca sai da sua máquina.</p>
     </div>
     <footer>Projeto de fã, sem afiliação com a Coffee Stain Studios. Mapa © Satisfactory.</footer>
@@ -117,6 +119,8 @@ export function mountLanding(root: HTMLElement, cb: LandingCallbacks): void {
   ctaBtn.addEventListener("click", () => {
     if (selectedFile) cb.onAnalyze(selectedFile, mode);
   });
+
+  q("#demoBtn").addEventListener("click", () => cb.onDemo(mode));
 }
 
 export function showError(code: ErrorCode, detail?: string): void {

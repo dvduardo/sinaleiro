@@ -6,10 +6,16 @@ import { mountSidebar, renderSidebar, highlightGroup } from "../results/sidebar"
 import { mountLens, openLens, closeLens } from "../results/lens";
 import { downloadReport } from "../results/export";
 
+/** Como obter o payload do outro modo: o fluxo normal reanalisa no worker
+ * (save já parseado); o modo demonstração busca o JSON pré-computado. */
+export type ModeSwitcher = (mode: Mode) => Promise<AnalysisPayload>;
+const workerSwitcher: ModeSwitcher = async (mode) => (await reanalyze(mode)).payload;
+
 let el: HTMLElement;
 let payload: AnalysisPayload;
 let saveKey = "";
 let fileName = "";
+let switchMode: ModeSwitcher = workerSwitcher;
 
 export function mountResults(root: HTMLElement): void {
   el = root;
@@ -55,8 +61,7 @@ export function mountResults(root: HTMLElement): void {
       setModeButtons(mode, true);
       el.querySelector("#rBusy")!.classList.add("on");
       try {
-        const result = await reanalyze(mode);
-        showResults(result.payload, saveKey, fileName);
+        showResults(await switchMode(mode), saveKey, fileName, switchMode);
       } catch {
         setModeButtons(payload.mode, false);
       } finally {
@@ -71,10 +76,12 @@ export function mountResults(root: HTMLElement): void {
   el.querySelector("#rNew")!.addEventListener("click", () => location.reload());
 }
 
-export function showResults(p: AnalysisPayload, key: string, fname: string): void {
+export function showResults(p: AnalysisPayload, key: string, fname: string,
+  switcher: ModeSwitcher = workerSwitcher): void {
   payload = p;
   saveKey = key;
   fileName = fname;
+  switchMode = switcher;
 
   (el.querySelector("#rFname") as HTMLElement).textContent = fname;
   setModeButtons(p.mode, false);

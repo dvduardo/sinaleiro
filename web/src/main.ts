@@ -5,6 +5,7 @@ import "./styles/loading.css";
 import "./styles/results.css";
 import "./styles/lens.css";
 
+import type { AnalysisPayload, Mode } from "./types";
 import { analyze, warmup, onProgress, AnalysisError } from "./pipeline/analyzer";
 import { mountLanding, showError } from "./screens/landing";
 import { mountLoading, startLoading, loadingProgress } from "./screens/loading";
@@ -57,7 +58,23 @@ mountLanding(screens.landing, {
       else showError("internal", String(err));
     }
   },
+  // demonstração: payloads pré-computados no build (web/public/demo/) — vai
+  // direto ao resultado, sem Pyodide; trocar de modo busca o outro JSON
+  onDemo: async (mode) => {
+    try {
+      showResults(await fetchDemo(mode), await digest("demo"), "malha de demonstração", fetchDemo);
+      show("results");
+    } catch (err) {
+      showError("internal", String(err));
+    }
+  },
 });
+
+async function fetchDemo(mode: Mode): Promise<AnalysisPayload> {
+  const resp = await fetch(`${import.meta.env.BASE_URL}demo/${mode}.json`);
+  if (!resp.ok) throw new Error(`demo ${mode}.json: HTTP ${resp.status}`);
+  return resp.json();
+}
 
 onProgress(loadingProgress);
 

@@ -11,7 +11,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "presmoke": "node scripts/build-py-bundle.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "demo": "node scripts/build-demo-payloads.mjs"
   },
   "devDependencies": {
     "fflate": "^0.8.2",

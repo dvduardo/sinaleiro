@@ -29,7 +29,13 @@ npm install
 npm run dev     # empacota src/*.py + vendor/ para o Pyodide, prepara o mapa e sobe o Vite
 npm run build   # build de produção em web/dist
 npm run smoke   # teste de paridade: pipeline no Pyodide (Node) vs CPython
+npm run demo    # regenera os payloads do modo demonstração (web/public/demo/)
 ```
+
+Os payloads da demonstração ("veja uma malha de demonstração" na landing) são
+**commitados** — o CI não tem saves. Rode `npm run demo` e commite quando o
+`PAYLOAD_VERSION` de `src/web_api.py` mudar ou para trocar o save de exemplo
+(`npm run demo -- /caminho/para/Save.sav`).
 
 ## Arquitetura
 
