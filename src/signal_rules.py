@@ -141,7 +141,7 @@ def junctions_with_labels(graph: RailGraph) -> list:
     junctions = [node for node in graph.nodes.values() if node.degree >= 3]
 
     def junction_pos(node: Node):
-        track_name = next(iter(node.edge_track_names))
+        track_name = min(node.edge_track_names)
         track = graph.tracks[track_name]
         node_a, _ = graph.track_endpoints[track_name]
         points = track.points_world
