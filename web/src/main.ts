@@ -1,57 +1,75 @@
-// Spike M2: página crua para validar o pipeline Pyodide fim-a-fim e medir o
-// tempo de parse. Substituída pela UI real no M3.
-import { analyze, reanalyze, warmup, onProgress, AnalysisError } from "./pipeline/analyzer";
-import type { Mode } from "./types";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/landing.css";
+import "./styles/loading.css";
+import "./styles/results.css";
+import "./styles/lens.css";
+
+import { analyze, warmup, onProgress, AnalysisError } from "./pipeline/analyzer";
+import { mountLanding, showError } from "./screens/landing";
+import { mountLoading, startLoading, loadingProgress } from "./screens/loading";
+import { mountResults, showResults } from "./screens/results";
+
+type ScreenName = "landing" | "loading" | "results";
 
 const app = document.getElementById("app")!;
 app.innerHTML = `
-  <h1>Sinaleiro — spike M2</h1>
-  <p><input type="file" id="file" accept=".sav"></p>
-  <p>
-    <label><input type="radio" name="mode" value="bidirectional" checked> Bidirecional</label>
-    <label><input type="radio" name="mode" value="oneway"> Mão única</label>
-    <button id="rerun" disabled>Reanalisar (troca de modo)</button>
-  </p>
-  <pre id="log" style="background:#111;color:#0f0;padding:12px;min-height:200px"></pre>
+  <section class="screen landing" id="scr-landing"></section>
+  <section class="screen loading" id="scr-loading" aria-label="Analisando o save"></section>
+  <section class="screen results" id="scr-results"></section>
 `;
 
-const log = document.getElementById("log")!;
-const fileInput = document.getElementById("file") as HTMLInputElement;
-const rerunBtn = document.getElementById("rerun") as HTMLButtonElement;
+const screens: Record<ScreenName, HTMLElement> = {
+  landing: document.getElementById("scr-landing")!,
+  loading: document.getElementById("scr-loading")!,
+  results: document.getElementById("scr-results")!,
+};
 
-function line(text: string) {
-  log.textContent += text + "\n";
+function show(name: ScreenName): void {
+  (Object.keys(screens) as ScreenName[]).forEach((k) => {
+    screens[k].classList.toggle("on", k === name);
+  });
 }
 
-function mode(): Mode {
-  return (document.querySelector('input[name="mode"]:checked') as HTMLInputElement).value as Mode;
-}
+// tempo mínimo na tela de carregamento, para o painel não "piscar" quando o
+// Pyodide já está quente e o save é pequeno
+const MIN_LOADING_MS = 1600;
 
-onProgress((stage, pct) => line(`[${pct}%] ${stage} @ ${(performance.now() / 1000).toFixed(1)}s`));
-
-function show(result: { payload: { stats: unknown }; elapsedMs: number }) {
-  line(`OK em ${(result.elapsedMs / 1000).toFixed(1)}s`);
-  line(JSON.stringify(result.payload.stats, null, 2));
-  rerunBtn.disabled = false;
-}
-
-function fail(err: unknown) {
-  const e = err as AnalysisError;
-  line(`ERRO ${e.code ?? "?"}: ${e.message}`);
-}
-
-fileInput.addEventListener("change", () => {
-  const file = fileInput.files?.[0];
-  if (!file) return;
-  log.textContent = "";
-  line(`analisando ${file.name} (${(file.size / 1e6).toFixed(1)} MB), modo ${mode()}…`);
-  analyze(file, mode()).then(show, fail);
+mountLoading(screens.loading);
+mountResults(screens.results);
+mountLanding(screens.landing, {
+  onAnalyze: async (file, mode) => {
+    show("loading");
+    startLoading(file.name, file.size);
+    const t0 = performance.now();
+    try {
+      // chave estável p/ persistir a checklist deste save (o conteúdo muda a
+      // cada autosave; nome+modo é o que identifica "a mesma malha" p/ o jogador)
+      const saveKey = await digest(`${file.name}`);
+      const result = await analyze(file, mode);
+      const wait = MIN_LOADING_MS - (performance.now() - t0);
+      if (wait > 0) await sleep(wait);
+      show("results");
+      showResults(result.payload, saveKey, file.name);
+    } catch (err) {
+      show("landing");
+      if (err instanceof AnalysisError) showError(err.code, err.message);
+      else showError("internal", String(err));
+    }
+  },
 });
 
-rerunBtn.addEventListener("click", () => {
-  line(`reanalisando no modo ${mode()}…`);
-  reanalyze(mode()).then(show, fail);
-});
+onProgress(loadingProgress);
 
-warmup();
-line("warmup do Pyodide disparado…");
+show("landing");
+warmup(); // baixa Pyodide + bundle enquanto o usuário escolhe o arquivo
+
+async function digest(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(hash)].slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

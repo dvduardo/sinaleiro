@@ -1,0 +1,113 @@
+/* C-02 — mesa do despachante, âmbar FICSIT (aprovado rev. 2) */
+.loading {
+  background: var(--crt-bg);
+  position: relative;
+  color: #E8CBA4;
+  display: none;
+  grid-template-columns: 1.25fr 1fr;
+  grid-template-rows: 1fr auto;
+}
+.loading.on { display: grid; }
+
+@media (max-width: 640px) {
+  .loading.on { grid-template-columns: 1fr; grid-template-rows: 1fr auto auto; }
+}
+
+/* scanlines */
+.loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(255, 220, 180, .04) 0 1px, transparent 1px 3px);
+}
+
+.loading .diag {
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+.loading .diag svg { width: 100%; max-height: min(60vh, 420px); }
+
+.dlog {
+  border-left: 1px solid var(--crt-line);
+  padding: 18px 20px;
+  font-family: var(--mono);
+  font-size: .76rem;
+  line-height: 1.9;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+}
+@media (max-width: 640px) {
+  .dlog { border-left: 0; border-top: 1px solid var(--crt-line); min-height: 170px; }
+}
+.dlog .ln {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--crt-dim);
+}
+.dlog .ln b { color: var(--crt-hi); font-weight: 600; }
+.dlog .ln .warn { color: var(--bad); }
+.dlog .cur::after {
+  content: "▌";
+  animation: blink 1s steps(1) infinite;
+  color: var(--crt);
+}
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .dlog .cur::after { animation: none; } }
+
+.dbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid var(--crt-line);
+  padding: 14px 20px;
+}
+.dbar .lbl {
+  font-family: var(--disp);
+  text-transform: uppercase;
+  letter-spacing: .2em;
+  font-size: .68rem;
+  color: var(--crt-lbl);
+  flex: none;
+}
+.blocks { display: flex; gap: 4px; flex: 1; }
+.blocks i {
+  height: 10px;
+  flex: 1;
+  background: #241C14;
+  border: 1px solid var(--crt-line);
+  border-radius: 1px;
+}
+.blocks i.lit {
+  background: var(--acc);
+  border-color: var(--acc);
+  box-shadow: 0 0 6px rgba(242, 123, 44, .55);
+}
+
+/* malha se desenhando */
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.rline {
+  stroke: var(--crt);
+  stroke-width: 2.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: draw 7s linear infinite;
+}
+.rline.d2 { animation-delay: .9s; }
+.rline.d3 { animation-delay: 1.8s; }
+.rline.d4 { animation-delay: 2.6s; }
+.jnode { fill: var(--crt-bg); stroke: var(--crt-hi); stroke-width: 2; }
+.jping { fill: none; stroke: var(--acc); stroke-width: 1.5; opacity: .6; }
+@media (prefers-reduced-motion: reduce) {
+  .rline { animation: none; stroke-dashoffset: 0; }
+}

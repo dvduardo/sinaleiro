@@ -25,8 +25,7 @@ function ensurePyodide(): Promise<PyodideInterface> {
     const py = await loadPyodide({ indexURL: PYODIDE_CDN });
 
     progress("bundle");
-    const base = (self.location.pathname.match(/^.*\//) ?? ["/"])[0];
-    const resp = await fetch(new URL(`${base}py/bundle.zip`, self.location.origin));
+    const resp = await fetch(new URL(`${import.meta.env.BASE_URL}py/bundle.zip`, self.location.origin));
     if (!resp.ok) throw new Error(`bundle.zip: HTTP ${resp.status}`);
     py.FS.mkdirTree("/app");
     py.unpackArchive(await resp.arrayBuffer(), "zip", { extractDir: "/app" });

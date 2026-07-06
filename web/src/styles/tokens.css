@@ -1,0 +1,41 @@
+/* Identidade FICSIT industrial aprovada no pitch (rev. 3).
+   O app é deliberadamente single-theme: todas as telas são "monitor da
+   FICSIT" — aço escuro, laranja oficial, âmbar CRT no carregamento. */
+:root {
+  --bg: #17181A;
+  --bg2: #1D1F22;
+  --panel: #222528;
+  --line: #33363B;
+  --line2: #43474D;
+  --ink: #EDEAE3;
+  --mut: #9C978C;
+  --mut2: #6F6B62;
+  --acc: #F27B2C;
+  --acc-hi: #FF8D3F;
+  --acc-ink: #1A1108;
+  --good: #3FBF8F;
+  --path: #4ED9A4;
+  --block: #EFBE62;
+  --bad: #E05038;
+  --sta: #57C7E3;
+
+  /* tela de carregamento (CRT âmbar) */
+  --crt-bg: #171310;
+  --crt: #FFA45C;
+  --crt-hi: #FFD9B0;
+  --crt-dim: #C08A4E;
+  --crt-lbl: #B07E48;
+  --crt-line: #3A2C1E;
+
+  /* painel da lupa */
+  --lens-bg: rgba(15, 12, 10, .94);
+  --lens-line: #33291F;
+  --lens-mut: #9A8F7E;
+  --lens-ink: #C9C0B2;
+
+  --hazard: repeating-linear-gradient(-45deg, #F27B2C 0 12px, #141516 12px 24px);
+
+  --disp: "Avenir Next Condensed", "Helvetica Neue Condensed", "Arial Narrow", "Roboto Condensed", sans-serif-condensed, sans-serif;
+  --body: "Avenir Next", Seravek, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
