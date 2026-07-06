@@ -1,5 +1,7 @@
 # Sinaleiro
 
+**No ar em https://dvduardo.github.io/sinaleiro/** · projeto aberto — [contribuições são bem-vindas](#contribuindo).
+
 Analisa o save do seu mundo de **Satisfactory** e recomenda onde colocar sinais ferroviários — qual trilho, que lado, virado para onde — sobre o mapa real do jogo.
 
 - **Sinal de Trajeto** (Path) nas entradas de cada junção, virado para a junção.
@@ -21,13 +23,23 @@ python3 src/report.py /caminho/para/Save.sav out --mao-unica   # ou --bidirecion
 python3 src/web_api.py /caminho/para/Save.sav --mao-unica       # payload JSON do site
 ```
 
-## Desenvolvimento do site
+## Rodando localmente
+
+Pré-requisitos: [Node.js](https://nodejs.org/) 22+ (site) e Python 3.11+ (CLI e teste de paridade — sem nenhuma dependência pip).
 
 ```sh
-cd web
+git clone https://github.com/dvduardo/sinaleiro.git
+cd sinaleiro/web
 npm install
-npm run dev     # empacota src/*.py + vendor/ para o Pyodide, prepara o mapa e sobe o Vite
-npm run build   # build de produção em web/dist
+npm run dev     # abre em http://localhost:5173
+```
+
+O `npm run dev` já faz tudo: empacota `src/*.py` + `vendor/` para o Pyodide, prepara o mapa e sobe o Vite. Para testar, use um save seu (`%LocalAppData%/FactoryGame/Saved/SaveGames` no Windows) ou o botão "veja uma malha de demonstração" na landing — não precisa ter o jogo.
+
+Outros comandos úteis:
+
+```sh
+npm run build   # build de produção em web/dist (tsc + vite)
 npm run smoke   # teste de paridade: pipeline no Pyodide (Node) vs CPython
 npm run demo    # regenera os payloads do modo demonstração (web/public/demo/)
 ```
@@ -55,3 +67,14 @@ save .sav ─▶ src/parse_save.py ─▶ src/graph.py ─▶ src/directions.py 
 - `web/` é o frontend (Vite + TypeScript vanilla, sem framework), publicado no GitHub Pages.
 - O parser binário de saves é o [sat_sav_parse](vendor/sat_sav_parse/) (vendorizado; veja a licença própria em `vendor/sat_sav_parse/LICENSE`).
 - `assets/map_1.0.jpg` é o mapa do jogo usado como camada base; a calibração mundo→mapa vive em `src/report.py` e `web/src/map/calibration.ts`.
+
+## Contribuindo
+
+Teve uma ideia boa ou achou um bug? **Contribuições são bem-vindas** — abra uma [issue](https://github.com/dvduardo/sinaleiro/issues) para discutir ou mande direto uma [pull request](https://github.com/dvduardo/sinaleiro/pulls) (a `main` é protegida; toda mudança entra por PR).
+
+Para uma PR tranquila:
+
+1. Faça o fork e rode o projeto localmente (seção acima).
+2. `cd web && npm run build` precisa passar — é o mesmo check que o CI roda na sua PR.
+3. Se mexer no pipeline Python (`src/`), rode também `npm run smoke` com um save seu: ele garante que o resultado no navegador (Pyodide) continua idêntico ao do CPython.
+4. Conte na descrição o que muda para o jogador — de preferência com um print do mapa.

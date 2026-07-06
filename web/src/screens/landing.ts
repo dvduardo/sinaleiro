@@ -61,7 +61,8 @@ export function mountLanding(root: HTMLElement, cb: LandingCallbacks): void {
       <button type="button" class="demo-link" id="demoBtn">sem um save à mão? veja uma malha de demonstração ▸</button>
       <p class="privacy"><b>Privacidade:</b> a análise roda inteira no seu navegador — o save nunca sai da sua máquina.</p>
     </div>
-    <footer>Projeto de fã, sem afiliação com a Coffee Stain Studios. Mapa © Satisfactory.</footer>
+    <footer>Projeto de fã, sem afiliação com a Coffee Stain Studios. Mapa © Satisfactory.<br>
+      Código aberto a contribuições — <a href="https://github.com/dvduardo/sinaleiro" target="_blank" rel="noopener">github.com/dvduardo/sinaleiro</a>.</footer>
   `;
 
   const drop = q("#drop");

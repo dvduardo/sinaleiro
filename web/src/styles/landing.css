@@ -152,4 +152,7 @@
   color: #5E5A52;
   font-size: .7rem;
   text-align: center;
+  line-height: 1.7;
 }
+.landing footer a { color: #9B968B; text-underline-offset: 2px; }
+.landing footer a:hover { color: var(--acc-hi); }
