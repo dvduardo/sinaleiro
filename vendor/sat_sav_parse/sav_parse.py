@@ -1533,6 +1533,9 @@ def parseProperties(currentEntitySaveVersion: int, offset: int, data: list, obje
                (offset, mapValue) = parseInt64(offset, data)
             elif valueType == "ByteProperty":
                (offset, mapValue) = parseUint8(offset, data)
+            elif valueType == "BoolProperty": # Only observed in modded save
+               (offset, mapValue) = parseUint8(offset, data)
+               mapValue = mapValue != 0
             elif valueType == "DoubleProperty": # Only observed in modded save
                (offset, mapValue) = parseDouble(offset, data)
             elif valueType == "ObjectProperty": # Only observed in modded save
