@@ -1519,6 +1519,8 @@ def parseProperties(currentEntitySaveVersion: int, offset: int, data: list, obje
                (offset, mapKey) = parseString(offset, data)
             elif keyType == "EnumProperty": # Only observed in modded save
                (offset, mapKey) = parseString(offset, data)
+            elif keyType == "StrProperty": # Only observed in modded save
+               (offset, mapKey) = parseString(offset, data)
             else:
                raise ParseError(f"Unsupported map keyType {keyType}")
 
@@ -1535,6 +1537,8 @@ def parseProperties(currentEntitySaveVersion: int, offset: int, data: list, obje
                (offset, mapValue) = parseDouble(offset, data)
             elif valueType == "ObjectProperty": # Only observed in modded save
                (offset, mapValue) = parseObjectReference(offset, data)
+            elif valueType == "StrProperty": # Only observed in modded save
+               (offset, mapValue) = parseString(offset, data)
             else:
                raise ParseError(f"Unsupported map valueType {valueType}")
 
