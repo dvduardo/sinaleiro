@@ -135,6 +135,22 @@ def _has_nearby_signal(position, signals, signal_type):
     return False
 
 
+def junctions_with_labels(graph: RailGraph) -> list:
+    """Junction nodes (3+ tracks meeting) as (label, node, world_pos) tuples,
+    with stable numbering so labels don't shuffle between runs."""
+    junctions = [node for node in graph.nodes.values() if node.degree >= 3]
+
+    def junction_pos(node: Node):
+        track_name = next(iter(node.edge_track_names))
+        track = graph.tracks[track_name]
+        node_a, _ = graph.track_endpoints[track_name]
+        points = track.points_world
+        return points[0] if node_a == node.node_id else points[-1]
+
+    junctions.sort(key=lambda n: (junction_pos(n)[0], junction_pos(n)[1]))
+    return [(f"J{i}", node, junction_pos(node)) for i, node in enumerate(junctions, 1)]
+
+
 def recommend_signals(graph: RailGraph, directions: dict | None = None) -> list:
     """directions=None (bidirectional mode) keeps the historic behavior of one
     entry + one exit signal per junction approach. With a directions dict
@@ -144,22 +160,7 @@ def recommend_signals(graph: RailGraph, directions: dict | None = None) -> list:
     stations = graph.network.stations
     signals = graph.network.signals
 
-    junctions = [node for node in graph.nodes.values() if node.degree >= 3]
-
-    # stable numbering so labels don't shuffle between runs
-    def junction_pos(node: Node):
-        track_name = next(iter(node.edge_track_names))
-        track = graph.tracks[track_name]
-        node_a, _ = graph.track_endpoints[track_name]
-        points = track.points_world
-        return points[0] if node_a == node.node_id else points[-1]
-
-    junctions.sort(key=lambda n: (junction_pos(n)[0], junction_pos(n)[1]))
-
-    for j_index, node in enumerate(junctions, 1):
-        label = f"J{j_index}"
-        j_pos = junction_pos(node)
-
+    for label, node, j_pos in junctions_with_labels(graph):
         for track_name in sorted(node.edge_track_names):
             track = graph.tracks[track_name]
             node_a, node_b = graph.track_endpoints[track_name]

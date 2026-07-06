@@ -5,6 +5,7 @@
 """
 import base64
 import html
+import io
 import math
 import os
 import sys
@@ -14,7 +15,10 @@ from parse_save import parse_rail_network
 from graph import build_graph
 from signal_rules import recommend_signals, _nearest_station
 from directions import infer_directions
-from geometry import sample_track, point_at_arc_length, distance, midpoint_and_tangent
+from geometry import (
+    sample_track, point_at_arc_length, distance, midpoint_and_tangent,
+    bezier_segments,
+)
 
 # The in-game map covers exactly this world extent (in cm, the save's native
 # unit). These are the community-established calibration values used by the
@@ -469,30 +473,15 @@ def _flow_arrows(network, directions):
 
 
 def _bezier_path(track, sx, sy):
-    """Render the track's spline as a cubic bezier path, converting Unreal's
-    Hermite (Location/LeaveTangent/ArriveTangent) spline keys using the
-    standard tangent/3 control-point rule."""
-    points = track.points_world
-    leave = track.leave_tangents_local
-    arrive = track.arrive_tangents_local
-    if len(points) < 2:
+    """Render the track's spline as a cubic bezier SVG path (control points
+    from geometry.bezier_segments)."""
+    flat = bezier_segments(track)
+    if flat is None:
         return None
-
-    def screen(world_point):
-        return sx(world_point[0]), sy(world_point[1])
-
-    x0, y0 = screen(points[0])
-    d = [f"M {x0:.1f},{y0:.1f}"]
-    for i in range(len(points) - 1):
-        p0, p1 = points[i], points[i + 1]
-        t_leave = leave[i] if i < len(leave) else [0, 0, 0]
-        t_arrive = arrive[i + 1] if i + 1 < len(arrive) else [0, 0, 0]
-        c1 = [p0[0] + t_leave[0] / 3.0, p0[1] + t_leave[1] / 3.0]
-        c2 = [p1[0] - t_arrive[0] / 3.0, p1[1] - t_arrive[1] / 3.0]
-        c1x, c1y = screen(c1)
-        c2x, c2y = screen(c2)
-        x1, y1 = screen(p1)
-        d.append(f"C {c1x:.1f},{c1y:.1f} {c2x:.1f},{c2y:.1f} {x1:.1f},{y1:.1f}")
+    d = [f"M {sx(flat[0]):.1f},{sy(flat[1]):.1f}"]
+    for i in range(2, len(flat), 6):
+        c1x, c1y, c2x, c2y, x1, y1 = flat[i:i + 6]
+        d.append(f"C {sx(c1x):.1f},{sy(c1y):.1f} {sx(c2x):.1f},{sy(c2y):.1f} {sx(x1):.1f},{sy(y1):.1f}")
     return " ".join(d)
 
 
@@ -506,33 +495,39 @@ def _star_points(cx, cy, r_outer, r_inner, points=5):
     return " ".join(coords)
 
 
-def generate_text_report(recommendations, out_path, directions=None, graph=None):
+def render_text_report(recommendations, directions=None, graph=None) -> str:
     counts = Counter(rec.signal_type for rec in recommendations)
-    with open(out_path, "w") as f:
-        f.write(f"Modo: {'mão única (mão direita)' if directions is not None else 'bidirecional'}\n")
-        f.write(
-            f"{len(recommendations)} sinais recomendados — "
-            f"{counts.get('Path', 0)} Sinal de Trajeto (Path), "
-            f"{counts.get('Block', 0)} Sinal de Trecho (Block)\n"
+    f = io.StringIO()
+    f.write(f"Modo: {'mão única (mão direita)' if directions is not None else 'bidirecional'}\n")
+    f.write(
+        f"{len(recommendations)} sinais recomendados — "
+        f"{counts.get('Path', 0)} Sinal de Trajeto (Path), "
+        f"{counts.get('Block', 0)} Sinal de Trecho (Block)\n"
+    )
+    if directions is not None:
+        known = sum(1 for d in directions.values() if d is not None)
+        f.write(f"Direções: {known}/{len(directions)} trilhos inferidos; "
+                f"{len(directions) - known} ambíguos\n")
+    f.write("=" * 60 + "\n\n")
+    for i, rec in enumerate(recommendations, 1):
+        station_txt = (
+            f"{rec.nearest_station_distance_m:.0f}m de '{rec.nearest_station_name}'"
+            if rec.nearest_station_name else "sem estação próxima cadastrada"
         )
-        if directions is not None:
-            known = sum(1 for d in directions.values() if d is not None)
-            f.write(f"Direções: {known}/{len(directions)} trilhos inferidos; "
-                    f"{len(directions) - known} ambíguos\n")
-        f.write("=" * 60 + "\n\n")
-        for i, rec in enumerate(recommendations, 1):
-            station_txt = (
-                f"{rec.nearest_station_distance_m:.0f}m de '{rec.nearest_station_name}'"
-                if rec.nearest_station_name else "sem estação próxima cadastrada"
-            )
-            f.write(
-                f"{i:3d}. [{rec.name_pt} ({rec.signal_type}) · {rec.junction_label} · {rec.role}] "
-                f"X={rec.position[0]:.0f} Y={rec.position[1]:.0f} Z={rec.position[2]:.0f}  "
-                f"({station_txt})\n"
-                f"     motivo: {rec.reason}\n"
-            )
-        if directions is not None:
-            _write_ambiguous_section(f, recommendations, directions, graph)
+        f.write(
+            f"{i:3d}. [{rec.name_pt} ({rec.signal_type}) · {rec.junction_label} · {rec.role}] "
+            f"X={rec.position[0]:.0f} Y={rec.position[1]:.0f} Z={rec.position[2]:.0f}  "
+            f"({station_txt})\n"
+            f"     motivo: {rec.reason}\n"
+        )
+    if directions is not None:
+        _write_ambiguous_section(f, recommendations, directions, graph)
+    return f.getvalue()
+
+
+def generate_text_report(recommendations, out_path, directions=None, graph=None):
+    with open(out_path, "w") as f:
+        f.write(render_text_report(recommendations, directions=directions, graph=graph))
 
 
 def _write_ambiguous_section(f, recommendations, directions, graph):
@@ -589,7 +584,7 @@ def _ask_mode() -> bool:
         print("Responda 1 ou 2.")
 
 
-def _warn_inconsistent_junctions(graph, directions):
+def count_inconsistent_junctions(graph, directions) -> int:
     """A one-way junction whose approaches are all known must have at least
     one entry and one exit; a violation means the inference got a direction
     wrong (not merely incomplete)."""
@@ -614,6 +609,11 @@ def _warn_inconsistent_junctions(graph, directions):
         else:
             if entries == 0 or exits == 0:
                 bad += 1
+    return bad
+
+
+def _warn_inconsistent_junctions(graph, directions):
+    bad = count_inconsistent_junctions(graph, directions)
     if bad:
         print(f"AVISO: {bad} junção(ões) com direções inferidas sem entrada ou sem "
               f"saída — a inferência pode estar errada nesses pontos; confira as setas no mapa.")

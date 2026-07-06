@@ -88,9 +88,46 @@ def midpoint_and_tangent(track: Track):
     return mid, (dx / norm, dy / norm)
 
 
+def bearing_deg(dx, dy) -> float:
+    """Compass bearing of an XY vector (0 = north, clockwise). World axes:
+    +X = east, +Y = south."""
+    return math.degrees(math.atan2(dx, -dy)) % 360.0
+
+
+def tangent_at_arc_length(samples: list, target_cm: float, window_cm: float = 100.0):
+    """Unit XY tangent of a sampled polyline at a given arc length, oriented
+    in the direction of increasing arc length."""
+    total = sum(distance(samples[i], samples[i + 1]) for i in range(len(samples) - 1))
+    a = point_at_arc_length(samples, max(0.0, target_cm - window_cm))
+    b = point_at_arc_length(samples, min(total, target_cm + window_cm))
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    norm = math.hypot(dx, dy) or 1.0
+    return dx / norm, dy / norm
+
+
+def bezier_segments(track: Track):
+    """The track spline as cubic-bezier control points in world XY, using the
+    Hermite tangent/3 rule: [x0, y0] followed by [c1x, c1y, c2x, c2y, x, y]
+    per segment. Returns None for degenerate tracks."""
+    points = track.points_world
+    leave = track.leave_tangents_local
+    arrive = track.arrive_tangents_local
+    if len(points) < 2:
+        return None
+    flat = [points[0][0], points[0][1]]
+    for i in range(len(points) - 1):
+        p0, p1 = points[i], points[i + 1]
+        t_leave = leave[i] if i < len(leave) else [0, 0, 0]
+        t_arrive = arrive[i + 1] if i + 1 < len(arrive) else [0, 0, 0]
+        flat.extend([
+            p0[0] + t_leave[0] / 3.0, p0[1] + t_leave[1] / 3.0,
+            p1[0] - t_arrive[0] / 3.0, p1[1] - t_arrive[1] / 3.0,
+            p1[0], p1[1],
+        ])
+    return flat
+
+
 def compass_dir(from_pos, to_pos) -> str:
     """Compass direction of to_pos seen from from_pos (pt-BR names)."""
-    dx = to_pos[0] - from_pos[0]
-    dy = to_pos[1] - from_pos[1]
-    angle = math.degrees(math.atan2(dx, -dy)) % 360.0  # 0 = north, clockwise
+    angle = bearing_deg(to_pos[0] - from_pos[0], to_pos[1] - from_pos[1])
     return COMPASS_PT[int((angle + 22.5) // 45) % 8]
