@@ -47,6 +47,11 @@ class SignalRecommendation:
     approach_dir: str = ""  # compass direction of this approach, seen from the junction
     role: str = "entrada"  # "entrada" (facing the junction) or "saída" (facing away)
     ambiguous: bool = False  # one-way mode only: direction unknown, treated as bidirectional
+    # mixed mode only: the classification of this approach's track (see
+    # classify.py). Always None in the other modes; never combined with
+    # ambiguous=True — in mixed mode a bidirectional track is a normal
+    # result, not an alert.
+    track_kind: str | None = None
 
     @property
     def name_pt(self) -> str:
@@ -151,11 +156,15 @@ def junctions_with_labels(graph: RailGraph) -> list:
     return [(f"J{i}", node, junction_pos(node)) for i, node in enumerate(junctions, 1)]
 
 
-def recommend_signals(graph: RailGraph, directions: dict | None = None) -> list:
+def recommend_signals(graph: RailGraph, directions: dict | None = None,
+                      classes: dict | None = None) -> list:
     """directions=None (bidirectional mode) keeps the historic behavior of one
     entry + one exit signal per junction approach. With a directions dict
     (track_name -> +1/-1/None, see directions.py) each approach gets only the
-    signal its inferred flow calls for."""
+    signal its inferred flow calls for. With a classes dict (mixed mode, see
+    classify.py) each approach follows its own classification: one-way arms
+    get a single signal, bidirectional arms the full pair, and unfinished
+    stubs get nothing at all."""
     recommendations: list[SignalRecommendation] = []
     stations = graph.network.stations
     signals = graph.network.signals
@@ -165,14 +174,33 @@ def recommend_signals(graph: RailGraph, directions: dict | None = None) -> list:
             track = graph.tracks[track_name]
             node_a, node_b = graph.track_endpoints[track_name]
             connector_index = 0 if node_a == node.node_id else 1
+
+            # Mixed mode: express the per-track classification through the
+            # same direction variable the one-way logic uses below.
+            kind = None
+            kind_note = ""
+            if classes is not None:
+                kind, class_direction = classes.get(track_name, ("bi_assumed", None))
+                if kind == "stub":
+                    continue  # unfinished line: no recommendation on this arm
+                direction = class_direction
+                if kind == "bi_confirmed":
+                    kind_note = (" Trecho bidirecional (via única obrigatória): "
+                                 "recebe o par completo de sinais.")
+                elif kind == "bi_assumed":
+                    kind_note = (" Trecho sem evidência de mão — tratado como "
+                                 "bidirecional; o par completo é a opção segura.")
+            else:
+                direction = directions.get(track_name) if directions is not None else None
+
             position = _point_along_track(track, connector_index, SIGNAL_SETBACK_CM)
 
-            # One-way mode: +1 flows connector0 -> connector1, so the flow
+            # One-way flow: +1 flows connector0 -> connector1, so the flow
             # enters this junction iff it exits the track at our end. Loop
             # tracks (both ends on the same node) have no defined role.
-            direction = directions.get(track_name) if directions is not None else None
-            ambiguous = directions is not None and (direction is None or node_a == node_b)
-            if directions is None or ambiguous:
+            ambiguous = (classes is None and directions is not None
+                         and (direction is None or node_a == node_b))
+            if direction is None or node_a == node_b or (directions is None and classes is None):
                 roles = ("entrada", "saída")
             elif (direction == 1) == (connector_index == 1):
                 roles = ("entrada",)
@@ -190,11 +218,12 @@ def recommend_signals(graph: RailGraph, directions: dict | None = None) -> list:
                 junction_label=label,
                 approach_dir=approach_dir,
                 ambiguous=ambiguous,
+                track_kind=kind,
             )
             ambiguous_note = (
                 " ATENÇÃO: direção deste trilho não pôde ser inferida — tratado "
                 "como bidirecional; confira o traçado."
-            ) if ambiguous else ""
+            ) if ambiguous else kind_note
             # Entry signal: protects trains arriving through this branch.
             if "entrada" in roles and not _has_nearby_signal(position, signals, "Path"):
                 recommendations.append(SignalRecommendation(
@@ -227,10 +256,14 @@ if __name__ == "__main__":
     network = parse_rail_network(sys.argv[1])
     graph = build_graph(network)
     directions = None
-    if "--mao-unica" in sys.argv:
+    classes = None
+    if "--misto" in sys.argv:
+        from classify import classify_tracks
+        classes = classify_tracks(graph, network)
+    elif "--mao-unica" in sys.argv:
         from directions import infer_directions
         directions = infer_directions(graph)
-    recs = recommend_signals(graph, directions)
+    recs = recommend_signals(graph, directions, classes)
     print(f"{len(recs)} recomendacoes de sinal")
     for rec in recs:
         loc = f"{rec.nearest_station_distance_m:.0f}m de '{rec.nearest_station_name}'" if rec.nearest_station_name else "sem estacao proxima"

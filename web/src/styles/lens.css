@@ -129,6 +129,8 @@
 .strack { stroke: #3E3A32; stroke-width: 8; fill: none; stroke-linecap: round; }
 .strackin { stroke: #A79E8A; stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; }
 .strack.amb { stroke: #57452a; }
+/* modo misto: braço bidirecional presumido — tracejado neutro, sem tom de alerta */
+.strack.assumed { stroke-dasharray: 12 8; }
 .sjun { fill: var(--acc); stroke: #12100D; stroke-width: 2; }
 .spost { stroke: #D8CFC0; stroke-width: 1.6; }
 .slampP { fill: var(--path); }

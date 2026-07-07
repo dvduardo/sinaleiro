@@ -82,8 +82,20 @@ export function renderMap(payload: AnalysisPayload): void {
       minY = Math.min(minY, b[i + 5]); maxY = Math.max(maxY, b[i + 5]);
     }
     const glow = pathEl(d, "trkglow");
-    const line = pathEl(d, track.direction === null ? "trk amb" : "trk");
-    if (track.direction === null) line.setAttribute("stroke-dasharray", "900 500");
+    let cls = "trk";
+    let dash: string | null = null;
+    if (track.kind !== undefined) {
+      // modo misto: cor por classificação (verde = bidirecional, cinza =
+      // linha inacabada); tracejado neutro marca o presumido, não é alerta
+      if (track.kind === "bi_confirmed") cls = "trk bi";
+      else if (track.kind === "bi_assumed") { cls = "trk bi assumed"; dash = "900 500"; }
+      else if (track.kind === "stub") { cls = "trk stub"; dash = "400 400"; }
+    } else if (track.direction === null) {
+      cls = "trk amb";
+      dash = "900 500";
+    }
+    const line = pathEl(d, cls);
+    if (dash) line.setAttribute("stroke-dasharray", dash);
     tracks.append(glow, line);
   }
 

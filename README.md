@@ -6,7 +6,9 @@ Analisa o save do seu mundo de **Satisfactory** e recomenda onde colocar sinais 
 
 - **Sinal de Trajeto** (Path) nas entradas de cada junção, virado para a junção.
 - **Sinal de Trecho** (Block) nas saídas, virado para fora — libera o bloco assim que o trem sai.
-- Modo **bidirecional** (par entrada+saída por aproximação) ou **mão única** (a direção de cada trilho é inferida do traçado).
+- Modo **misto** (padrão): cada trilho é classificado automaticamente como mão única ou bidirecional — via dupla ganha um sinal por poste, via simples ganha o par completo, e pontas soltas em construção ficam de fora. Os modos manuais **bidirecional** e **mão única** continuam disponíveis.
+
+No modo misto a classificação combina quatro evidências: trilhos-ponte do grafo não podem ser mão única (o trem não teria volta); pares paralelos seguem a regra da mão direita; a orientação da estação no save dá o sentido de atracação; e a geometria da agulha resolve desvios pendurados entre duas junções (um trem não faz curva fechada numa junção). Sem evidência nenhuma, o trecho é tratado como bidirecional — o par completo de sinais é sempre seguro.
 
 ## Privacidade
 
@@ -17,10 +19,11 @@ O site roda o analisador **inteiro no seu navegador** (Python via [Pyodide](http
 O pipeline também funciona como ferramenta local (Python 3.11+, sem dependências externas):
 
 ```sh
-python3 src/report.py /caminho/para/Save.sav out --mao-unica   # ou --bidirecional
+python3 src/report.py /caminho/para/Save.sav out --misto   # ou --mao-unica / --bidirecional
 # gera out/mapa_sinais.html (mapa interativo) e out/sinais_recomendados.txt (checklist)
 
-python3 src/web_api.py /caminho/para/Save.sav --mao-unica       # payload JSON do site
+python3 src/web_api.py /caminho/para/Save.sav --misto       # payload JSON do site
+python3 src/classify.py /caminho/para/Save.sav              # só a classificação por trilho
 ```
 
 ## Rodando localmente
@@ -53,7 +56,7 @@ Os payloads da demonstração ("veja uma malha de demonstração" na landing) s�
 
 ```
 save .sav ─▶ src/parse_save.py ─▶ src/graph.py ─▶ src/directions.py (mão única)
-                                       │
+                                       │          src/classify.py   (misto)
                                        ▼
                               src/signal_rules.py ─▶ recomendações
                                        │
@@ -67,6 +70,12 @@ save .sav ─▶ src/parse_save.py ─▶ src/graph.py ─▶ src/directions.py 
 - `web/` é o frontend (Vite + TypeScript vanilla, sem framework), publicado no GitHub Pages.
 - O parser binário de saves é o [sat_sav_parse](vendor/sat_sav_parse/) (vendorizado; veja a licença própria em `vendor/sat_sav_parse/LICENSE`).
 - `assets/map_1.0.jpg` é o mapa do jogo usado como camada base; a calibração mundo→mapa vive em `src/report.py` e `web/src/map/calibration.ts`.
+
+## Ideias futuras (contribuições bem-vindas)
+
+- **Facing dos sinais existentes**: ler a rotação dos sinais que o jogador já colocou — sinal só num sentido = mão única naquele sentido; nos dois = bidirecional confirmado pelo próprio jogador. Também consertaria a limitação atual de "sinal do mesmo tipo virado para o lado errado conta como já existente".
+- **Balloon loops**: detectar laços de retorno pendurados por um único nó (laço mão única + haste bidirecional).
+- Aplicar a geometria da agulha também no modo mão única puro (hoje ela é exclusiva do misto para manter o modo antigo intacto).
 
 ## Contribuindo
 

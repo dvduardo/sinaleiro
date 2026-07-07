@@ -23,8 +23,10 @@ const venvPython = join(repoRoot, ".venv", "bin", "python3");
 const python = existsSync(venvPython) ? venvPython : "python3";
 
 mkdirSync(outDir, { recursive: true });
-for (const mode of ["bidirectional", "oneway"]) {
-  const flag = mode === "oneway" ? ["--mao-unica"] : [];
+const MODE_FLAGS = { bidirectional: [], oneway: ["--mao-unica"], mixed: ["--misto"] };
+
+for (const mode of ["bidirectional", "oneway", "mixed"]) {
+  const flag = MODE_FLAGS[mode];
   const json = execFileSync(python, [join(repoRoot, "src", "web_api.py"), savePath, ...flag], {
     maxBuffer: 64 * 1024 * 1024,
     stdio: ["ignore", "pipe", "inherit"],

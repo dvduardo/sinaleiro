@@ -57,10 +57,13 @@ export function renderSidebar(payload: AnalysisPayload, saveKey: string, cb: Sid
       row.className = `srow${rec.ambiguous ? " amb" : ""}`;
       row.dataset.i = String(id);
       const facing = rec.role === "entrada" ? "virado para a junção" : "virado para fora";
+      // modo misto: sufixo neutro nos braços bidirecionais (não é alerta)
+      const kindTxt = rec.track_kind === "bi_confirmed" || rec.track_kind === "bi_assumed"
+        ? " (trecho bidirecional)" : "";
       row.innerHTML =
         `<input type="checkbox" aria-label="Marcar como colocado">` +
         `<span class="ptype ${rec.type === "Path" ? "path" : "block"}">${rec.type === "Path" ? "Trajeto" : "Trecho"}</span>` +
-        `<span><span class="st">${rec.ambiguous ? "⚠ " : ""}${cap(rec.role)} ${escapeHtml(rec.approach_dir)}, ${facing}</span><br>` +
+        `<span><span class="st">${rec.ambiguous ? "⚠ " : ""}${cap(rec.role)} ${escapeHtml(rec.approach_dir)}, ${facing}${kindTxt}</span><br>` +
         `<span class="sco">${fmtXY(rec.x, rec.y)} · Z ${Math.round(rec.z / 100)} m</span></span>`;
 
       const checkbox = row.querySelector("input")!;

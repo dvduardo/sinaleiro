@@ -3,6 +3,7 @@ Satisfactory .sav file, using the vendored sat_sav_parse library.
 
 This module only reads data - it never writes back to the save file.
 """
+import math
 import os
 import sys
 from dataclasses import dataclass, field
@@ -63,6 +64,26 @@ class Station:
     position: list
     track_ref: str | None
     name: str | None = None
+    # Facing of the station actor in the world XY plane (unit vector), from the
+    # actor header's rotation quaternion. Train stations are directional: a
+    # docked train travels along this axis, so it seeds direction inference.
+    forward: list | None = None  # [dx, dy] or None if rotation missing
+
+
+def _actor_forward_xy(rotation) -> list | None:
+    """Unit XY vector the actor's local +X axis points at, from the header's
+    [x, y, z, w] quaternion. Buildings only rotate around Z (yaw), but this
+    uses the full quaternion rotation of (1,0,0) so tilted actors still work."""
+    if not rotation or len(rotation) != 4:
+        return None
+    x, y, z, w = rotation
+    # rotate (1,0,0) by the quaternion; take the XY components
+    fx = 1.0 - 2.0 * (y * y + z * z)
+    fy = 2.0 * (x * y + w * z)
+    norm = math.hypot(fx, fy)
+    if norm < 1e-6:
+        return None
+    return [fx / norm, fy / norm]
 
 
 @dataclass
@@ -199,6 +220,7 @@ def parse_rail_network(save_path: str) -> RailNetwork:
                     instance_name=header.instanceName,
                     position=list(header.position),
                     track_ref=track_ref.pathName if track_ref else None,
+                    forward=_actor_forward_xy(getattr(header, "rotation", None)),
                 ))
 
             elif type_path == STATION_IDENTIFIER_TYPE_PATH:
