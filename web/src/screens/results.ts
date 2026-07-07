@@ -29,6 +29,7 @@ export function mountResults(root: HTMLElement): void {
       <div class="rstats" id="rStats"></div>
       <span class="spacer"></span>
       <div class="rmode" role="group" aria-label="Modo dos trilhos">
+        <button type="button" data-mode="mixed">⇆ Misto</button>
         <button type="button" data-mode="bidirectional">⇄ Bidirecional</button>
         <button type="button" data-mode="oneway">→ Mão única</button>
       </div>
@@ -37,11 +38,13 @@ export function mountResults(root: HTMLElement): void {
     </div>
     <div class="rmain">
       <div class="viewport" id="rViewport">
-        <div class="legend">
+        <div class="legend" id="rLegend">
           <span class="rchip"><i style="background:var(--acc)"></i>Junção — clique no pino para abrir a lupa</span>
           <span class="rchip"><i style="background:var(--path)"></i>Sinal existente (Trajeto)</span>
           <span class="rchip"><i style="background:var(--block)"></i>Sinal existente (Trecho)</span>
           <span class="rchip"><i style="background:var(--sta)"></i>Estação</span>
+          <span class="rchip mixedonly"><i style="background:#3FBF8F"></i>Trilho bidirecional (tracejado = presumido)</span>
+          <span class="rchip mixedonly"><i style="background:#8A8F98"></i>Linha inacabada</span>
         </div>
         <div class="reanalyzing" id="rBusy">recalculando sinais…</div>
       </div>
@@ -84,6 +87,7 @@ export function showResults(p: AnalysisPayload, key: string, fname: string,
   switchMode = switcher;
 
   (el.querySelector("#rFname") as HTMLElement).textContent = fname;
+  el.querySelector("#rLegend")!.classList.toggle("mixed", p.mode === "mixed");
   setModeButtons(p.mode, false);
   renderStats(p);
   renderMap(p);
@@ -121,7 +125,21 @@ function renderStats(p: AnalysisPayload): void {
     `<span class="rchip"><b>${p.stats.junctions}</b> junções</span>`,
     `<span class="rchip"><b>${p.stats.stations}</b> estações</span>`,
   ];
-  if (p.mode === "oneway") {
+  if (p.mode === "mixed") {
+    chips.push(`<span class="rchip"><b>${p.stats.oneway_tracks ?? 0}</b> mão única</span>`);
+    const bi = (p.stats.bi_confirmed_tracks ?? 0) + (p.stats.bi_assumed_tracks ?? 0);
+    chips.push(`<span class="rchip"><b>${bi}</b> bidirecionais</span>`);
+    if ((p.stats.bi_assumed_tracks ?? 0) > 0) {
+      // presumido é resultado normal no misto: chip neutro, sem .warn
+      chips.push(`<span class="rchip"><b>${p.stats.bi_assumed_tracks}</b> presumidos</span>`);
+    }
+    if ((p.stats.stub_tracks ?? 0) > 0) {
+      chips.push(`<span class="rchip"><b>${p.stats.stub_tracks}</b> inacabados</span>`);
+    }
+    if ((p.stats.inconsistent_junctions ?? 0) > 0) {
+      chips.push(`<span class="rchip warn"><b>${p.stats.inconsistent_junctions}</b> junções suspeitas</span>`);
+    }
+  } else if (p.mode === "oneway") {
     const known = p.stats.directions_known ?? 0;
     const total = p.stats.directions_total ?? 0;
     chips.push(`<span class="rchip"><b>${total ? Math.round((known / total) * 100) : 0}%</b> mão inferida</span>`);

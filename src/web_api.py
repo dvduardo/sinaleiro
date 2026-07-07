@@ -15,6 +15,7 @@ import tempfile
 from parse_save import parse_rail_network
 from graph import build_graph
 from directions import infer_directions
+from classify import classify_tracks
 from signal_rules import recommend_signals, junctions_with_labels, SIGNAL_SETBACK_CM
 from geometry import (
     sample_track, distance, point_at_arc_length, tangent_at_arc_length,
@@ -22,7 +23,7 @@ from geometry import (
 )
 from report import render_text_report, count_inconsistent_junctions, _flow_arrows
 
-PAYLOAD_VERSION = 1
+PAYLOAD_VERSION = 2
 
 
 class InvalidSaveError(ValueError):
@@ -70,17 +71,21 @@ def load_save(save_bytes, progress=None) -> None:
 
 def analyze(mode: str, progress=None) -> str:
     """Run the signal recommendation for the already-loaded save and return
-    the payload as a JSON string. mode: "bidirectional" | "oneway"."""
+    the payload as a JSON string. mode: "mixed" | "bidirectional" | "oneway"."""
     if _graph is None:
         raise RuntimeError("chame load_save() antes de analyze()")
     directions = None
+    classes = None
     if mode == "oneway":
         _progress(progress, "directions")
         directions = infer_directions(_graph)
+    elif mode == "mixed":
+        _progress(progress, "directions")  # same loading-screen stage id
+        classes = classify_tracks(_graph, _network)
     _progress(progress, "signals")
-    recommendations = recommend_signals(_graph, directions)
+    recommendations = recommend_signals(_graph, directions, classes)
     _progress(progress, "serialize")
-    payload = _build_payload(_network, _graph, recommendations, directions, mode)
+    payload = _build_payload(_network, _graph, recommendations, directions, classes, mode)
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
@@ -116,8 +121,13 @@ def _signal_angles(graph, rec):
     return round(approach, 1), round(facing, 1), round(target / 100.0, 1)
 
 
-def _build_payload(network, graph, recommendations, directions, mode):
+def _build_payload(network, graph, recommendations, directions, classes, mode):
     junctions_meta = junctions_with_labels(graph)
+    # flow arrows and junction audits only look at the one-way stretches
+    flow_directions = directions
+    if classes is not None:
+        flow_directions = {name: (d if kind == "oneway" else None)
+                           for name, (kind, d) in classes.items()}
 
     recs_json = []
     rec_ids_by_label = {}
@@ -142,6 +152,8 @@ def _build_payload(network, graph, recommendations, directions, mode):
             "nearest_station_m": round(rec.nearest_station_distance_m, 1)
             if rec.nearest_station_distance_m is not None else None,
         })
+        if classes is not None:
+            recs_json[-1]["track_kind"] = rec.track_kind
 
     junctions_json = []
     for label, node, pos in junctions_meta:
@@ -158,6 +170,10 @@ def _build_payload(network, graph, recommendations, directions, mode):
             "nearest_station": nearest,
             "rec_ids": rec_ids_by_label.get(label, []),
         })
+        if classes is not None:
+            junctions_json[-1]["stub_arms"] = sum(
+                1 for t in node.edge_track_names
+                if classes.get(t, ("", None))[0] == "stub")
 
     tracks_json = []
     for name, track in network.tracks.items():
@@ -165,7 +181,12 @@ def _build_payload(network, graph, recommendations, directions, mode):
         if flat is None:
             continue
         entry = {"name": name, "bez": [round(v) for v in flat]}
-        if directions is not None:
+        if classes is not None:
+            kind, class_direction = classes.get(name, ("bi_assumed", None))
+            entry["kind"] = kind
+            if kind == "oneway":
+                entry["direction"] = class_direction
+        elif directions is not None:
             entry["direction"] = directions.get(name)
         tracks_json.append(entry)
 
@@ -190,7 +211,20 @@ def _build_payload(network, graph, recommendations, directions, mode):
         "ambiguous": sum(1 for r in recommendations if r.ambiguous),
     }
     flow_json = []
-    if directions is not None:
+    if classes is not None:
+        kind_counts: dict[str, int] = {}
+        for kind, _ in classes.values():
+            kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        stats["oneway_tracks"] = kind_counts.get("oneway", 0)
+        stats["bi_confirmed_tracks"] = kind_counts.get("bi_confirmed", 0)
+        stats["bi_assumed_tracks"] = kind_counts.get("bi_assumed", 0)
+        stats["stub_tracks"] = kind_counts.get("stub", 0)
+        stats["inconsistent_junctions"] = count_inconsistent_junctions(graph, flow_directions)
+        flow_json = [
+            [round(x), round(y), round(deg, 1)]
+            for x, y, deg in _flow_arrows(network, flow_directions)
+        ]
+    elif directions is not None:
         stats["directions_total"] = len(directions)
         stats["directions_known"] = sum(1 for d in directions.values() if d is not None)
         stats["inconsistent_junctions"] = count_inconsistent_junctions(graph, directions)
@@ -209,7 +243,8 @@ def _build_payload(network, graph, recommendations, directions, mode):
         "existing_signals": existing_json,
         "junctions": junctions_json,
         "recommendations": recs_json,
-        "text_report": render_text_report(recommendations, directions=directions, graph=graph),
+        "text_report": render_text_report(recommendations, directions=directions, graph=graph,
+                                          classes=classes),
     }
 
 
@@ -218,9 +253,14 @@ if __name__ == "__main__":
     flags = [a for a in sys.argv[1:] if a.startswith("--")]
     positional = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not positional:
-        print("Usage: python3 src/web_api.py /path/to/save.sav [--mao-unica]", file=sys.stderr)
+        print("Usage: python3 src/web_api.py /path/to/save.sav [--misto|--mao-unica]", file=sys.stderr)
         sys.exit(1)
     with open(positional[0], "rb") as fh:
         data = fh.read()
-    cli_mode = "oneway" if "--mao-unica" in flags else "bidirectional"
+    if "--misto" in flags:
+        cli_mode = "mixed"
+    elif "--mao-unica" in flags:
+        cli_mode = "oneway"
+    else:
+        cli_mode = "bidirectional"
     print(analyze_bytes(data, cli_mode, progress=lambda s: print(f"[{s}]", file=sys.stderr)))

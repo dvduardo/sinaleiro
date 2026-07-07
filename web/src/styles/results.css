@@ -119,6 +119,9 @@
   border-radius: 50%;
   margin-right: 6px;
 }
+/* chips de legenda exclusivos do modo misto */
+.legend .mixedonly { display: none; }
+.legend.mixed .mixedonly { display: inline-block; }
 
 .reanalyzing {
   position: absolute;
@@ -140,6 +143,11 @@
 /* elementos SVG do mapa (contra-escalados via --tw/--gw) */
 .trk { stroke: var(--acc-hi); fill: none; stroke-linecap: round; opacity: .92; stroke-width: var(--tw, 300px); }
 .trk.amb { stroke: #ff9f1c; }
+/* modo misto: verde = trecho bidirecional (tracejado = presumido, sem tom
+   de alerta); cinza = linha inacabada, que não recebe recomendações */
+.trk.bi { stroke: #3FBF8F; }
+.trk.bi.assumed { opacity: .82; }
+.trk.stub { stroke: #8A8F98; opacity: .8; }
 .trkglow { stroke: rgba(242, 123, 44, .3); fill: none; stroke-linecap: round; stroke-width: var(--gw, 900px); }
 .mk { cursor: default; }
 .mk.jpin { cursor: pointer; }

@@ -6,7 +6,7 @@
 // sentido do trem que vai LER o sinal; com rotate(facing − 90) o poste do
 // glifo cai naturalmente do lado direito desse trem — a regra do jogo.
 import { fmtXY } from "../map/calibration";
-import type { AnalysisPayload, Junction, Recommendation } from "../types";
+import type { AnalysisPayload, Junction, Mode, Recommendation } from "../types";
 
 const CX = 150, CY = 100;      // centro do esquemático (viewBox 300×200)
 const SPOKE_R = 92;            // comprimento de cada aproximação
@@ -30,13 +30,17 @@ export function closeLens(): void {
 
 export function openLens(payload: AnalysisPayload, junction: Junction): void {
   const recs = junction.rec_ids.map((id) => payload.recommendations[id]);
-  const oneway = payload.mode === "oneway";
+  const mode = payload.mode;
+  const oneway = mode === "oneway";
   const hasAmb = recs.some((r) => r.ambiguous);
+  const hasAssumed = mode === "mixed" && recs.some((r) => r.track_kind === "bi_assumed");
+  const stubArms = mode === "mixed" ? (junction.stub_arms ?? 0) : 0;
   const xCrossing = junction.degree >= 4;
   const allPath = recs.length > 0 && recs.every((r) => r.type === "Path");
 
   const flags: string[] = [];
   if (oneway) flags.push("mão única");
+  if (stubArms > 0) flags.push("braço inacabado");
   if (xCrossing) flags.push("⚠ cruzamento");
   const title = `Junção ${junction.label} · ${recs.length} ${recs.length === 1 ? "sinal" : "sinais"}${flags.length ? " · " + flags.join(" · ") : ""}`;
 
@@ -54,10 +58,10 @@ export function openLens(payload: AnalysisPayload, junction: Junction): void {
       <button type="button" class="jp-x" aria-label="Fechar painel">✕</button>
     </div>
     <div class="jp-body">
-      ${schematicSvg(recs, oneway)}
-      ${legendHtml(recs, oneway)}
-      ${stepsHtml(recs, junction, oneway, xCrossing, allPath)}
-      ${notesHtml(oneway, hasAmb, xCrossing, allPath)}
+      ${schematicSvg(recs, mode)}
+      ${legendHtml(recs, mode)}
+      ${stepsHtml(recs, junction, mode, xCrossing, allPath)}
+      ${notesHtml(mode, hasAmb, hasAssumed, stubArms, xCrossing, allPath)}
     </div>
   `;
 
@@ -88,10 +92,11 @@ function unit(bearingDeg: number): [number, number] {
 interface Spoke {
   deg: number;
   recs: Recommendation[];
-  flow: "in" | "out" | null; // sentido do fluxo em mão única (null = ambíguo/bidirecional)
+  flow: "in" | "out" | null; // sentido do fluxo mão única (null = ambíguo/bidirecional)
+  assumed: boolean; // modo misto: bidirecional presumido (tracejado neutro)
 }
 
-function buildSpokes(recs: Recommendation[], oneway: boolean): Spoke[] {
+function buildSpokes(recs: Recommendation[], mode: Mode): Spoke[] {
   // um raio por aproximação (trilho); recomendações do mesmo trilho compartilham o raio
   const byTrack = new Map<string, Recommendation[]>();
   for (const rec of recs) {
@@ -102,16 +107,19 @@ function buildSpokes(recs: Recommendation[], oneway: boolean): Spoke[] {
   const spokes: Spoke[] = [];
   for (const list of byTrack.values()) {
     let flow: Spoke["flow"] = null;
-    if (oneway && list.length === 1 && !list[0].ambiguous) {
+    if (mode === "oneway" && list.length === 1 && !list[0].ambiguous) {
+      flow = list[0].role === "entrada" ? "in" : "out";
+    } else if (mode === "mixed" && list.length === 1 && list[0].track_kind === "oneway") {
       flow = list[0].role === "entrada" ? "in" : "out";
     }
-    spokes.push({ deg: list[0].approach_deg, recs: list, flow });
+    const assumed = mode === "mixed" && list[0].track_kind === "bi_assumed";
+    spokes.push({ deg: list[0].approach_deg, recs: list, flow, assumed });
   }
   return spokes;
 }
 
-function schematicSvg(recs: Recommendation[], oneway: boolean): string {
-  const spokes = buildSpokes(recs, oneway);
+function schematicSvg(recs: Recommendation[], mode: Mode): string {
+  const spokes = buildSpokes(recs, mode);
   const parts: string[] = [];
 
   // trilhos (aproximações)
@@ -119,7 +127,8 @@ function schematicSvg(recs: Recommendation[], oneway: boolean): string {
     const [ux, uy] = unit(spoke.deg);
     const x2 = CX + ux * SPOKE_R, y2 = CY + uy * SPOKE_R;
     const amb = spoke.recs.some((r) => r.ambiguous);
-    parts.push(`<path class="strack${amb ? " amb" : ""}" d="M${CX} ${CY} L${x2.toFixed(1)} ${y2.toFixed(1)}"/>`);
+    const cls = amb ? " amb" : spoke.assumed ? " assumed" : "";
+    parts.push(`<path class="strack${cls}" d="M${CX} ${CY} L${x2.toFixed(1)} ${y2.toFixed(1)}"/>`);
     parts.push(`<path class="strackin" d="M${CX} ${CY} L${x2.toFixed(1)} ${y2.toFixed(1)}"/>`);
     if (spoke.flow) {
       // pontilhado animado no sentido do fluxo
@@ -175,7 +184,7 @@ function schematicSvg(recs: Recommendation[], oneway: boolean): string {
 
 // ---------- textos ----------
 
-function legendHtml(recs: Recommendation[], oneway: boolean): string {
+function legendHtml(recs: Recommendation[], mode: Mode): string {
   const hasPath = recs.some((r) => r.type === "Path");
   const hasBlock = recs.some((r) => r.type === "Block");
   const rows: string[] = [];
@@ -183,9 +192,13 @@ function legendHtml(recs: Recommendation[], oneway: boolean): string {
     rows.push(`<span><i class="lp"></i>Trajeto (verde) — a seta é o sentido do trem que vai ler o sinal: aponta PARA a junção</span>`);
   }
   if (hasBlock) {
-    rows.push(oneway
-      ? `<span><i class="lb"></i>Trecho (âmbar) nas saídas, apontando no sentido de saída</span>`
-      : `<span><i class="lb"></i>Trecho (âmbar) — mesmo poste, lado oposto do trilho, apontando PARA FORA</span>`);
+    if (mode === "oneway") {
+      rows.push(`<span><i class="lb"></i>Trecho (âmbar) nas saídas, apontando no sentido de saída</span>`);
+    } else if (mode === "mixed") {
+      rows.push(`<span><i class="lb"></i>Trecho (âmbar) — nas saídas de mão única e no par dos braços bidirecionais, apontando PARA FORA</span>`);
+    } else {
+      rows.push(`<span><i class="lb"></i>Trecho (âmbar) — mesmo poste, lado oposto do trilho, apontando PARA FORA</span>`);
+    }
   }
   return `<div class="jp-leg">${rows.join("")}</div>`;
 }
@@ -193,7 +206,7 @@ function legendHtml(recs: Recommendation[], oneway: boolean): string {
 function stepsHtml(
   recs: Recommendation[],
   junction: Junction,
-  oneway: boolean,
+  mode: Mode,
   xCrossing: boolean,
   allPath: boolean,
 ): string {
@@ -207,8 +220,10 @@ function stepsHtml(
   ];
   if (xCrossing && allPath) {
     steps.push(`<li><b>Só Trajeto:</b> o cruzamento inteiro é um bloco único — nenhum sinal dentro dele; cada entrada recebe um Trajeto virado para o X.</li>`);
-  } else if (oneway) {
+  } else if (mode === "oneway") {
     steps.push(`<li><b>Um sinal por poste:</b> siga as setas — a entrada recebe só o Trajeto (virado para a junção) e cada saída só o Trecho (virado para fora).</li>`);
+  } else if (mode === "mixed") {
+    steps.push(`<li><b>Por braço:</b> braço de mão única recebe um sinal só (siga a seta); braço bidirecional recebe o par Trajeto + Trecho no mesmo poste, um para cada lado.</li>`);
   } else {
     steps.push(`<li><b>Lado e sentido:</b> olhando para a junção, o <b>Trajeto</b> fica do seu lado direito, virado para ela. O <b>Trecho</b> vai no mesmo poste, do outro lado do trilho, virado para fora.</li>`);
   }
@@ -216,7 +231,14 @@ function stepsHtml(
   return `<ol class="jp-steps">${steps.join("")}</ol>`;
 }
 
-function notesHtml(oneway: boolean, hasAmb: boolean, xCrossing: boolean, allPath: boolean): string {
+function notesHtml(
+  mode: Mode,
+  hasAmb: boolean,
+  hasAssumed: boolean,
+  stubArms: number,
+  xCrossing: boolean,
+  allPath: boolean,
+): string {
   const notes: string[] = [];
   if (xCrossing) {
     notes.push(`<p class="jp-note warn">⚠ Junções de 4+ aproximações são o principal ponto de deadlock — confira se nenhum trem consegue parar em cima do cruzamento.</p>`);
@@ -224,7 +246,13 @@ function notesHtml(oneway: boolean, hasAmb: boolean, xCrossing: boolean, allPath
   if (hasAmb) {
     notes.push(`<p class="jp-note">A mão de um dos trilhos não pôde ser inferida — ele volta ao par completo Trajeto + Trecho e o trilho aparece tracejado no mapa. Confira o traçado.</p>`);
   }
-  if (!oneway || !allPath) {
+  if (hasAssumed) {
+    notes.push(`<p class="jp-note">Um dos braços não tem evidência de mão e foi tratado como bidirecional (tracejado no esquema e no mapa) — o par completo é seguro em qualquer caso.</p>`);
+  }
+  if (stubArms > 0) {
+    notes.push(`<p class="jp-note">${stubArms === 1 ? "Um braço desta junção é uma linha inacabada (cinza no mapa) e não recebeu recomendação" : `${stubArms} braços desta junção são linhas inacabadas (cinza no mapa) e não receberam recomendação`} — conecte a linha e reanalise.</p>`);
+  }
+  if (mode !== "oneway" || !allPath) {
     notes.push(`<p class="jp-note">Regra que o site já resolve por você: no jogo, um sinal só vale para o trem que passa por ele à direita — por isso cada lado do trilho tem o seu.</p>`);
   }
   return notes.join("");

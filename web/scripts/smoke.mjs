@@ -22,8 +22,10 @@ const python = existsSync(venvPython) ? venvPython : "python3";
 
 let pyodideCache = null;
 
-for (const mode of ["bidirectional", "oneway"]) {
-  const flag = mode === "oneway" ? ["--mao-unica"] : [];
+const MODE_FLAGS = { bidirectional: [], oneway: ["--mao-unica"], mixed: ["--misto"] };
+
+for (const mode of ["bidirectional", "oneway", "mixed"]) {
+  const flag = MODE_FLAGS[mode];
 
   const t0 = Date.now();
   const cpython = execFileSync(python, [join(repoRoot, "src", "web_api.py"), savePath, ...flag], {

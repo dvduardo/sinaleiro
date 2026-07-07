@@ -14,6 +14,7 @@ const FILES = [
   "src/parse_save.py",
   "src/graph.py",
   "src/directions.py",
+  "src/classify.py",
   "src/geometry.py",
   "src/signal_rules.py",
   "src/report.py",

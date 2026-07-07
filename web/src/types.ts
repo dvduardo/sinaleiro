@@ -1,8 +1,12 @@
-/** Espelha o payload v1 de src/web_api.py — coordenadas em cm de mundo
+/** Espelha o payload v2 de src/web_api.py — coordenadas em cm de mundo
  * (as mesmas que o jogador vê no jogo); +X = leste, +Y = sul. */
 
-export type Mode = "bidirectional" | "oneway";
+export type Mode = "mixed" | "bidirectional" | "oneway";
 export type SignalType = "Path" | "Block";
+/** Classificação por trilho do modo misto (classify.py): mão única,
+ * bidirecional confirmado (ponte no grafo), bidirecional presumido
+ * (sem evidência — par completo por segurança) ou linha inacabada. */
+export type TrackKind = "oneway" | "bi_confirmed" | "bi_assumed" | "stub";
 
 export interface Stats {
   tracks: number;
@@ -16,14 +20,22 @@ export interface Stats {
   directions_total?: number;
   directions_known?: number;
   inconsistent_junctions?: number;
+  /** Só no modo misto: contagem de trilhos por classificação. */
+  oneway_tracks?: number;
+  bi_confirmed_tracks?: number;
+  bi_assumed_tracks?: number;
+  stub_tracks?: number;
 }
 
 export interface TrackGeom {
   name: string;
   /** [x0,y0] + [c1x,c1y,c2x,c2y,x,y] por segmento (bezier cúbico). */
   bez: number[];
-  /** Só no modo mão única: +1/-1 = fluxo inferido, null = ambíguo. */
+  /** Modo mão única: +1/-1 = fluxo inferido, null = ambíguo.
+   * Modo misto: presente só quando kind === "oneway". */
   direction?: 1 | -1 | null;
+  /** Só no modo misto. */
+  kind?: TrackKind;
 }
 
 export interface StationRef {
@@ -46,6 +58,8 @@ export interface Junction {
   degree: number;
   nearest_station: string | null;
   rec_ids: number[];
+  /** Só no modo misto: braços inacabados (sem recomendação) nesta junção. */
+  stub_arms?: number;
 }
 
 export interface Recommendation {
@@ -69,14 +83,17 @@ export interface Recommendation {
   reason: string;
   nearest_station: string | null;
   nearest_station_m: number | null;
+  /** Só no modo misto: classificação do trilho desta aproximação
+   * (nunca "stub" — braços inacabados não geram recomendação). */
+  track_kind?: TrackKind;
 }
 
 export interface AnalysisPayload {
-  version: 1;
+  version: 2;
   mode: Mode;
   stats: Stats;
   tracks: TrackGeom[];
-  /** [x, y, graus] — setas de fluxo, só no modo mão única. */
+  /** [x, y, graus] — setas de fluxo (mão única; no misto, só trilhos oneway). */
   flow_arrows: [number, number, number][];
   stations: StationRef[];
   existing_signals: ExistingSignal[];

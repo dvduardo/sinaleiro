@@ -67,7 +67,20 @@ def _find_pairs(graph: RailGraph):
     return pairs
 
 
-def infer_directions(graph: RailGraph) -> dict:
+def infer_directions(graph: RailGraph, *, blocked=frozenset(), extra_seeds=None,
+                     junction_pass_mode: str = "full", superedge_resolver=None) -> dict:
+    """Defaults reproduce the historic one-way behavior exactly. The mixed
+    mode passes:
+      blocked — tracks already classified bidirectional (bridges) or stub;
+        they never receive a direction and propagation flows around them.
+      extra_seeds — track_name -> ±1 authoritative seeds (station facing);
+        they override the geometric pair seeds on the same track.
+      junction_pass_mode="strict" — the "a junction needs an entry and an
+        exit" deduction only fires on junctions with no blocked arm, since a
+        bidirectional arm plays both roles at once.
+      superedge_resolver — callable(directions) -> {track_name: ±1} extra
+        assignments (switch geometry), run to a fixpoint with propagation.
+    """
     directions: dict[str, int | None] = {name: None for name in graph.tracks}
 
     # 1. seed directions from parallel pairs + right-hand rule:
@@ -76,7 +89,16 @@ def infer_directions(graph: RailGraph) -> dict:
     #    conn0->conn1 tangent: positive = partner already on the left of +1.
     pairs = _find_pairs(graph)
     for name, (_, lateral) in pairs.items():
+        if name in blocked:
+            continue
         directions[name] = 1 if lateral > 0 else -1
+
+    # station-facing seeds are game mechanics, not heuristics: they win over
+    # the pair seed whenever both exist for the same track.
+    for name, direction in (extra_seeds or {}).items():
+        if name in blocked or name not in directions:
+            continue
+        directions[name] = direction
 
     # 2. propagate through degree-2 nodes by flow continuity: a train leaving
     #    track A through a simple joint must continue into track B in the
@@ -87,7 +109,7 @@ def infer_directions(graph: RailGraph) -> dict:
         node_tracks.setdefault(node_b, []).append(track_name)
 
     conflicts = set()  # contradictory evidence: forced to None (ambiguous) at the end
-    banned = set()  # once contradictory, never re-inferred
+    banned = set(blocked)  # once contradictory (or blocked), never inferred
     queue = [name for name, d in directions.items() if d is not None]
 
     def propagate():
@@ -130,6 +152,8 @@ def infer_directions(graph: RailGraph) -> dict:
         for node, tracks_here in node_tracks.items():
             if len(tracks_here) < 3:
                 continue
+            if junction_pass_mode == "strict" and any(t in blocked for t in tracks_here):
+                continue  # a bidirectional arm satisfies both roles by itself
             unknown = [t for t in tracks_here if directions[t] is None]
             if len(unknown) != 1:
                 continue
@@ -163,9 +187,25 @@ def infer_directions(graph: RailGraph) -> dict:
             changed = True
         return changed
 
-    propagate()
-    while junction_pass():
+    def apply_resolver():
+        """Switch-geometry assignments (mixed mode only). Terminates: only
+        ever fills in unknowns, so each round strictly shrinks them."""
+        if superedge_resolver is None:
+            return False
+        changed = False
+        for name, implied in superedge_resolver(directions).items():
+            if directions.get(name) is None and name not in banned:
+                directions[name] = implied
+                queue.append(name)
+                changed = True
+        return changed
+
+    def run_to_fixpoint():
         propagate()
+        while junction_pass() or apply_resolver():
+            propagate()
+
+    run_to_fixpoint()
 
     # settle contradictions (they become ambiguous/None); with them out of
     # the way, junction consistency may determine a few more approaches.
@@ -175,8 +215,7 @@ def infer_directions(graph: RailGraph) -> dict:
             directions[name] = None
         banned.update(conflicts)
         conflicts.clear()
-        while junction_pass():
-            propagate()
+        run_to_fixpoint()
 
     return directions
 

@@ -36,7 +36,11 @@ def _bounds(points):
     return min(xs), max(xs), min(ys), max(ys)
 
 
-def generate_html(network, graph, recommendations, out_path, directions=None):
+BI_TRACK_COLOR = "#3fbf8f"    # confirmed/assumed bidirectional stretches (brand green)
+STUB_TRACK_COLOR = "#8a8f98"  # unfinished loose ends (neutral grey, not an alert)
+
+
+def generate_html(network, graph, recommendations, out_path, directions=None, classes=None):
     all_points = []
     for track in network.tracks.values():
         all_points.extend(track.points_world)
@@ -92,7 +96,20 @@ def generate_html(network, graph, recommendations, out_path, directions=None):
         d = _bezier_path(track, sx, sy)
         if not d:
             continue
-        if directions is not None and directions.get(name) is None:
+        if classes is not None:
+            # mixed mode: color per classification; dasharray is in world
+            # units, so it needs no counter-scaling, and the attributes
+            # override the group stroke
+            kind = classes.get(name, ("bi_assumed", None))[0]
+            if kind == "bi_confirmed":
+                svg_parts.append(f'<path d="{d}" stroke="{BI_TRACK_COLOR}" />')
+            elif kind == "bi_assumed":
+                svg_parts.append(f'<path d="{d}" stroke="{BI_TRACK_COLOR}" stroke-dasharray="900 500" />')
+            elif kind == "stub":
+                svg_parts.append(f'<path d="{d}" stroke="{STUB_TRACK_COLOR}" stroke-dasharray="400 400" />')
+            else:
+                svg_parts.append(f'<path d="{d}" />')
+        elif directions is not None and directions.get(name) is None:
             # ambiguous track: dasharray is in world units, so it needs no
             # counter-scaling; the attribute overrides the group stroke
             svg_parts.append(f'<path d="{d}" stroke="#ff9f1c" stroke-dasharray="900 500" />')
@@ -203,7 +220,17 @@ def generate_html(network, graph, recommendations, out_path, directions=None):
     svg_parts.append("</svg>")
     svg = "\n".join(svg_parts)
 
-    if directions is not None:
+    if classes is not None:
+        mode_label = " — modo misto (detecção automática)"
+        mode_legend = (
+            '<span style="color:#ffffff">➤ Direção do fluxo (mão única)</span>'
+            f'<span><span class="swatch" style="background:{BI_TRACK_COLOR}"></span>'
+            'Trilho bidirecional (tracejado = presumido)</span>'
+            f'<span><span class="swatch" style="background:{STUB_TRACK_COLOR}"></span>'
+            'Linha inacabada (sem recomendações)</span>'
+        )
+        save_key = "railway-signals-done-mixed"
+    elif directions is not None:
         mode_label = " — modo mão única"
         mode_legend = (
             '<span style="color:#ffffff">➤ Direção do fluxo</span>'
@@ -495,16 +522,30 @@ def _star_points(cx, cy, r_outer, r_inner, points=5):
     return " ".join(coords)
 
 
-def render_text_report(recommendations, directions=None, graph=None) -> str:
+def render_text_report(recommendations, directions=None, graph=None, classes=None) -> str:
     counts = Counter(rec.signal_type for rec in recommendations)
     f = io.StringIO()
-    f.write(f"Modo: {'mão única (mão direita)' if directions is not None else 'bidirecional'}\n")
+    if classes is not None:
+        mode_txt = "misto (mão única e bidirecional detectados por trilho)"
+    elif directions is not None:
+        mode_txt = "mão única (mão direita)"
+    else:
+        mode_txt = "bidirecional"
+    f.write(f"Modo: {mode_txt}\n")
     f.write(
         f"{len(recommendations)} sinais recomendados — "
         f"{counts.get('Path', 0)} Sinal de Trajeto (Path), "
         f"{counts.get('Block', 0)} Sinal de Trecho (Block)\n"
     )
-    if directions is not None:
+    if classes is not None:
+        kind_counts = Counter(kind for kind, _ in classes.values())
+        f.write(
+            f"Trilhos: {kind_counts.get('oneway', 0)} mão única · "
+            f"{kind_counts.get('bi_confirmed', 0)} bidirecionais confirmados · "
+            f"{kind_counts.get('bi_assumed', 0)} bidirecionais presumidos · "
+            f"{kind_counts.get('stub', 0)} inacabados\n"
+        )
+    elif directions is not None:
         known = sum(1 for d in directions.values() if d is not None)
         f.write(f"Direções: {known}/{len(directions)} trilhos inferidos; "
                 f"{len(directions) - known} ambíguos\n")
@@ -520,14 +561,41 @@ def render_text_report(recommendations, directions=None, graph=None) -> str:
             f"({station_txt})\n"
             f"     motivo: {rec.reason}\n"
         )
-    if directions is not None:
+    if classes is not None:
+        _write_assumed_section(f, classes, graph)
+    elif directions is not None:
         _write_ambiguous_section(f, recommendations, directions, graph)
     return f.getvalue()
 
 
-def generate_text_report(recommendations, out_path, directions=None, graph=None):
+def generate_text_report(recommendations, out_path, directions=None, graph=None, classes=None):
     with open(out_path, "w") as f:
-        f.write(render_text_report(recommendations, directions=directions, graph=graph))
+        f.write(render_text_report(recommendations, directions=directions, graph=graph,
+                                    classes=classes))
+
+
+def _write_assumed_section(f, classes, graph):
+    """Mixed mode appendix: stretches with no directional evidence at all.
+    They got the full signal pair (always safe), listed here as a neutral
+    heads-up — bidirectional is a normal result in this mode, not an error."""
+    lines = []
+    for name in sorted(classes):
+        kind, _ = classes[name]
+        if kind != "bi_assumed":
+            continue
+        track = graph.tracks.get(name)
+        if track is None:
+            continue
+        mid, _tan = midpoint_and_tangent(track)
+        station_name, station_dist = _nearest_station(mid, graph.network.stations)
+        where = (f"~{station_dist:.0f}m de '{station_name}'"
+                 if station_name else "sem estação próxima")
+        lines.append(f"  - track {name} ({where})\n")
+    if not lines:
+        return
+    f.write("\n" + "-" * 60 + "\n")
+    f.write("TRECHOS BIDIRECIONAIS PRESUMIDOS (sem evidência de mão — par completo aplicado):\n")
+    f.writelines(lines)
 
 
 def _write_ambiguous_section(f, recommendations, directions, graph):
@@ -567,21 +635,25 @@ def _write_ambiguous_section(f, recommendations, directions, graph):
     f.writelines(other_lines)
 
 
-def _ask_mode() -> bool:
-    """Ask interactively whether the network is one-way. Returns one_way."""
+def _ask_mode() -> str:
+    """Ask interactively which analysis mode to run. Returns "mixed",
+    "bidirectional" or "oneway"."""
     if not sys.stdin.isatty():
-        print("Entrada não interativa — assumindo trilhos bidirecionais "
-              "(use --mao-unica ou --bidirecional para escolher sem prompt).")
-        return False
+        print("Entrada não interativa — assumindo o modo misto (detecção automática); "
+              "use --misto, --mao-unica ou --bidirecional para escolher sem prompt.")
+        return "mixed"
     while True:
         answer = input(
-            "Seus trilhos são [1] bidirecionais ou [2] mão única (mão direita)? [1/2] "
+            "Seus trilhos são [1] mistos (detectar automaticamente — recomendado), "
+            "[2] bidirecionais ou [3] mão única (mão direita)? [1/2/3] "
         ).strip()
-        if answer == "1":
-            return False
+        if answer in ("", "1"):
+            return "mixed"
         if answer == "2":
-            return True
-        print("Responda 1 ou 2.")
+            return "bidirectional"
+        if answer == "3":
+            return "oneway"
+        print("Responda 1, 2 ou 3.")
 
 
 def count_inconsistent_junctions(graph, directions) -> int:
@@ -623,31 +695,48 @@ def main():
     flags = [a for a in sys.argv[1:] if a.startswith("--")]
     positional = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not positional:
-        print("Usage: python3 src/report.py /path/to/save.sav [out_dir] [--mao-unica|--bidirecional]")
+        print("Usage: python3 src/report.py /path/to/save.sav [out_dir] [--misto|--mao-unica|--bidirecional]")
         sys.exit(1)
     save_path = positional[0]
     out_dir = positional[1] if len(positional) > 1 else "."
-    if "--mao-unica" in flags:
-        one_way = True
+    if "--misto" in flags:
+        mode = "mixed"
+    elif "--mao-unica" in flags:
+        mode = "oneway"
     elif "--bidirecional" in flags:
-        one_way = False
+        mode = "bidirectional"
     else:
-        one_way = _ask_mode()
+        mode = _ask_mode()
 
     network = parse_rail_network(save_path)
     graph = build_graph(network)
-    directions = infer_directions(graph) if one_way else None
-    if directions is not None:
+    directions = None
+    classes = None
+    if mode == "mixed":
+        from classify import classify_tracks
+        classes = classify_tracks(graph, network)
+        # flow arrows and junction audits only care about the one-way stretches
+        directions = {name: (d if kind == "oneway" else None)
+                      for name, (kind, d) in classes.items()}
+        kind_counts = Counter(kind for kind, _ in classes.values())
+        print(f"Modo misto: {kind_counts.get('oneway', 0)} trilhos mão única, "
+              f"{kind_counts.get('bi_confirmed', 0)} bidirecionais confirmados, "
+              f"{kind_counts.get('bi_assumed', 0)} bidirecionais presumidos, "
+              f"{kind_counts.get('stub', 0)} inacabados.")
+        _warn_inconsistent_junctions(graph, directions)
+    elif mode == "oneway":
+        directions = infer_directions(graph)
         known = sum(1 for d in directions.values() if d is not None)
         print(f"Modo mão única: {known}/{len(directions)} trilhos com direção inferida; "
               f"{len(directions) - known} ambíguos (tratados como bidirecionais).")
         _warn_inconsistent_junctions(graph, directions)
-    recommendations = recommend_signals(graph, directions)
+    recommendations = recommend_signals(graph, directions if classes is None else None, classes)
 
     html_path = f"{out_dir}/mapa_sinais.html"
     txt_path = f"{out_dir}/sinais_recomendados.txt"
-    generate_html(network, graph, recommendations, html_path, directions=directions)
-    generate_text_report(recommendations, txt_path, directions=directions, graph=graph)
+    generate_html(network, graph, recommendations, html_path, directions=directions, classes=classes)
+    generate_text_report(recommendations, txt_path, directions=directions, graph=graph,
+                         classes=classes)
     print(f"{len(recommendations)} recomendações geradas.")
     print(f"Mapa: {html_path}")
     print(f"Lista: {txt_path}")

@@ -8,6 +8,7 @@ export interface LandingCallbacks {
 }
 
 const MODE_NOTES: Record<Mode, string> = {
+  mixed: "// detectamos trilho a trilho: mão única ganha um sinal por poste, trechos bidirecionais o par completo",
   bidirectional: "// cada aproximação de junção recebe o par Trajeto + Trecho",
   oneway: "// entradas recebem Trajeto, saídas só Trecho — a mão é inferida do seu layout",
 };
@@ -32,7 +33,7 @@ const ERROR_TEXTS: Record<ErrorCode, { title: string; hint: string }> = {
 };
 
 let selectedFile: File | null = null;
-let mode: Mode = "bidirectional";
+let mode: Mode = "mixed";
 let el: HTMLElement;
 
 export function mountLanding(root: HTMLElement, cb: LandingCallbacks): void {
@@ -53,10 +54,11 @@ export function mountLanding(root: HTMLElement, cb: LandingCallbacks): void {
       </div>
       <input type="file" id="fileInput" accept=".sav" class="sr-only" aria-hidden="true" tabindex="-1">
       <div class="mode" role="group" aria-label="Modo dos trilhos">
-        <button type="button" class="on" data-mode="bidirectional">⇄ Trilhos bidirecionais</button>
+        <button type="button" class="on" data-mode="mixed">⇆ Misto (automático)</button>
+        <button type="button" data-mode="bidirectional">⇄ Bidirecionais</button>
         <button type="button" data-mode="oneway">→ Mão única</button>
       </div>
-      <p class="mode-note" id="modeNote">${MODE_NOTES.bidirectional}</p>
+      <p class="mode-note" id="modeNote">${MODE_NOTES.mixed}</p>
       <button type="button" class="cta" id="cta" disabled>Analisar malha ▸</button>
       <button type="button" class="demo-link" id="demoBtn">sem um save à mão? veja uma malha de demonstração ▸</button>
       <p class="privacy"><b>Privacidade:</b> a análise roda inteira no seu navegador — o save nunca sai da sua máquina.</p>
