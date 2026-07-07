@@ -94,6 +94,43 @@ GENERIC_BUILDING_EXCLUDE_PREFIXES = (
 )
 
 
+# Object bodies we actually decode; everything else only contributes its
+# header (type + position), which is all signals/stations/buildings need.
+PARSED_TYPE_PATHS = (TRACK_TYPE_PATHS | SIGNAL_TYPE_PATHS | STATION_TYPE_PATHS
+                     | {CONNECTION_CLASS_PATH, STATION_IDENTIFIER_TYPE_PATH})
+
+_original_object_parse = sav_parse.Object.parse
+
+
+def _skipping_object_parse(self, headerSaveVersion, objectUE5Version, offset, data, header):
+    """Drop-in for sav_parse.Object.parse that decodes only rail-related
+    bodies. On a big factory save ~97% of objects are machines/belts/etc. we
+    never read; their bodies are jumped over via the objectSize prefix (plus
+    the per-object version block that saves with gameVersion >= 53 append
+    after the body), cutting parse time by roughly 10x."""
+    type_path = getattr(header, "typePath", None) or getattr(header, "className", None)
+    if type_path in PARSED_TYPE_PATHS:
+        return _original_object_parse(self, headerSaveVersion, objectUE5Version, offset, data, header)
+    (offset, game_version) = sav_parse.parseUint32(offset, data)
+    (offset, migrate_flag) = sav_parse.parseUint32(offset, data)
+    (offset, object_size) = sav_parse.parseUint32(offset, data)
+    jump = offset + object_size
+    self.instanceName = header.instanceName
+    self.objectGameVersion = game_version
+    self.shouldMigrateObjectRefsToPersistentFlag = migrate_flag
+    self.properties = []
+    self.propertyTypes = []
+    self.actorReferenceAssociations = None
+    self.actorSpecificInfo = None
+    self.perObjectVersionData = None
+    if game_version >= 53:
+        (jump, has_version_data) = sav_parse.parseBool(jump, data, sav_parse.parseUint32,
+                                                       "Object.shouldSerializePerObjectVersionData")
+        if has_version_data:
+            (jump, self.perObjectVersionData) = sav_parse.parseSaveObjectVersionData(jump, data)
+    return jump
+
+
 def _get(properties, name, default=None):
     for prop_name, value in properties:
         if prop_name == name:
@@ -106,7 +143,11 @@ def _header_type_path(header):
 
 
 def parse_rail_network(save_path: str) -> RailNetwork:
-    parsed = sav_parse.readFullSaveFile(save_path)
+    sav_parse.Object.parse = _skipping_object_parse
+    try:
+        parsed = sav_parse.readFullSaveFile(save_path)
+    finally:
+        sav_parse.Object.parse = _original_object_parse
 
     tracks: dict[str, Track] = {}
     connections: dict[str, Connection] = {}
