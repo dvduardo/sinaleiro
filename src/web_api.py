@@ -47,10 +47,12 @@ def load_save(save_bytes, progress=None) -> None:
     global _network, _graph
     _progress(progress, "parse")
     # the vendored parser only accepts a filename; under Pyodide this lands
-    # in the in-memory Emscripten FS, so there is no real disk I/O
-    path = os.path.join(tempfile.gettempdir(), "sinaleiro_current.sav")
-    with open(path, "wb") as f:
+    # in the in-memory Emscripten FS, so there is no real disk I/O. The name
+    # must be unique per process: concurrent CPython runs (e.g. smoke test
+    # alongside the CLI) would otherwise unlink each other's file.
+    with tempfile.NamedTemporaryFile(suffix=".sav", delete=False) as f:
         f.write(bytes(save_bytes))
+        path = f.name
     try:
         network = parse_rail_network(path)
     except (NoRailsError, InvalidSaveError):
