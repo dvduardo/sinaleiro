@@ -2,6 +2,7 @@
 // persistem no navegador (por save + modo).
 import { fmtXY } from "../map/calibration";
 import type { AnalysisPayload } from "../types";
+import { t, compass, roleLabel } from "../i18n";
 
 export interface SidebarCallbacks {
   onLocate: (junctionLabel: string, x: number, y: number) => void;
@@ -24,8 +25,8 @@ export function renderSidebar(payload: AnalysisPayload, saveKey: string, cb: Sid
 
   el.innerHTML = `
     <div class="sbhead">
-      <p class="ttl">Plano de instalação</p>
-      <div class="cnt"><b id="sbN">0</b><span>de ${total} sinais instalados</span></div>
+      <p class="ttl">${t("sidebar.title")}</p>
+      <div class="cnt"><b id="sbN">0</b><span>${t("sidebar.count")(total)}</span></div>
       <div class="sbbar"><i id="sbBar"></i></div>
     </div>
     <div class="sblist" id="sbList"></div>
@@ -39,10 +40,9 @@ export function renderSidebar(payload: AnalysisPayload, saveKey: string, cb: Sid
     group.dataset.j = j.label;
 
     const summary = document.createElement("summary");
-    const warn = j.degree >= 4 ? " ⚠" : "";
     summary.innerHTML =
-      `<span>Junção ${j.label}${warn} · ${j.nearest_station ? `perto de "${escapeHtml(j.nearest_station)}"` : "sem estação próxima"}</span>` +
-      `<button type="button" class="lupa">Lupa</button>` +
+      `<span>${t("sidebar.junction")(j.label, j.degree >= 4)} · ${j.nearest_station ? t("sidebar.nearStation")(escapeHtml(j.nearest_station)) : t("sidebar.noStation")}</span>` +
+      `<button type="button" class="lupa">${t("sidebar.lupa")}</button>` +
       `<span class="gcnt"></span>`;
     summary.querySelector(".lupa")!.addEventListener("click", (e) => {
       e.preventDefault();
@@ -56,14 +56,14 @@ export function renderSidebar(payload: AnalysisPayload, saveKey: string, cb: Sid
       const row = document.createElement("div");
       row.className = `srow${rec.ambiguous ? " amb" : ""}`;
       row.dataset.i = String(id);
-      const facing = rec.role === "entrada" ? "virado para a junção" : "virado para fora";
+      const facing = rec.role === "entrada" ? t("sidebar.facing.entry") : t("sidebar.facing.exit");
       // modo misto: sufixo neutro nos braços bidirecionais (não é alerta)
       const kindTxt = rec.track_kind === "bi_confirmed" || rec.track_kind === "bi_assumed"
-        ? " (trecho bidirecional)" : "";
+        ? t("sidebar.bidirectionalSuffix") : "";
       row.innerHTML =
-        `<input type="checkbox" aria-label="Marcar como colocado">` +
-        `<span class="ptype ${rec.type === "Path" ? "path" : "block"}">${rec.type === "Path" ? "Trajeto" : "Trecho"}</span>` +
-        `<span><span class="st">${rec.ambiguous ? "⚠ " : ""}${cap(rec.role)} ${escapeHtml(rec.approach_dir)}, ${facing}${kindTxt}</span><br>` +
+        `<input type="checkbox" aria-label="${t("sidebar.checkAria")}">` +
+        `<span class="ptype ${rec.type === "Path" ? "path" : "block"}">${rec.type === "Path" ? t("sidebar.type.path") : t("sidebar.type.block")}</span>` +
+        `<span><span class="st">${rec.ambiguous ? "⚠ " : ""}${cap(roleLabel(rec.role))} ${escapeHtml(compass(rec.approach_dir))}, ${facing}${kindTxt}</span><br>` +
         `<span class="sco">${fmtXY(rec.x, rec.y)} · Z ${Math.round(rec.z / 100)} m</span></span>`;
 
       const checkbox = row.querySelector("input")!;

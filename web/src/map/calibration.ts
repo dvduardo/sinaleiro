@@ -1,6 +1,8 @@
 /* Calibração mundo→mapa (mesmos valores de src/report.py, estabelecidos pela
  * comunidade para o mapa 1.0). Coordenadas do mundo em cm; +X = leste,
  * +Y = sul — eixos já batem com a tela. */
+import { locale } from "../i18n";
+
 export const MAP_X_MIN = -324698.832031;
 export const MAP_Y_MIN = -375000.0;
 export const MAP_SIZE = 750000.0;
@@ -15,7 +17,7 @@ export function mapY(worldY: number): number {
 
 /** "−294.946" — número inteiro com separador de milhar e menos tipográfico. */
 export function fmtCoord(v: number): string {
-  const s = Math.round(Math.abs(v)).toLocaleString("pt-BR");
+  const s = Math.round(Math.abs(v)).toLocaleString(locale());
   return (v < 0 ? "−" : "") + s;
 }
 

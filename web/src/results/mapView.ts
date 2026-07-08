@@ -4,6 +4,7 @@
 // com Pointer Events para arrastar no toque e pinch com dois dedos.
 import { MAP_SIZE, mapX, mapY } from "../map/calibration";
 import type { AnalysisPayload, Junction } from "../types";
+import { t } from "../i18n";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 // Zoom máximo: 0,2 px por cm de mundo (1 m = 20 px) — além disso o mapa de
@@ -128,7 +129,7 @@ export function renderMap(payload: AnalysisPayload): void {
   // sinais já existentes no save
   for (const s of payload.existing_signals) {
     existing.appendChild(marker(mapX(s.x), mapY(s.y), `mk sigmk ${s.type === "Path" ? "p" : "b"}`,
-      `<circle r="5"/><title>Sinal existente (${s.type === "Path" ? "Trajeto" : "Trecho"})</title>`));
+      `<circle r="5"/><title>${escapeXml(s.type === "Path" ? t("map.existingSignal.path") : t("map.existingSignal.block"))}</title>`));
   }
 
   // pinos de junção

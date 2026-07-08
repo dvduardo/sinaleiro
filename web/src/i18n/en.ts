@@ -1,0 +1,176 @@
+import type { Messages } from "./pt";
+
+export const en: Messages = {
+  "app.title": "Sinaleiro — railway signals for Satisfactory",
+  "loading.screenAria": "Analyzing save",
+
+  // landing.ts
+  "landing.brand": "Sinaleiro",
+  "landing.brandTag": "railway signal planner · unofficial",
+  "landing.h1": "Your save goes in. A signal plan comes out.",
+  "landing.lead": "We read your world's rail network, find every junction, and tell you exactly where to place Path and Block Signals — with coordinates and a reason.",
+  "landing.dropAria": "Attach save file",
+  "landing.dropTitle": "Drop your .sav file here",
+  "landing.dropHint": "or click to browse · usually in %LocalAppData%/FactoryGame",
+  "landing.dropHintFile": (mb: string) => `${mb} MB · click to change file`,
+  "landing.modeAria": "Track mode",
+  "landing.mode.mixed": "⇆ Mixed (automatic)",
+  "landing.mode.bidirectional": "⇄ Bidirectional",
+  "landing.mode.oneway": "→ One-way",
+  "landing.modeNote.mixed": "// detected track by track: one-way gets one signal per post, bidirectional stretches the full pair",
+  "landing.modeNote.bidirectional": "// each junction approach gets the Path + Block pair",
+  "landing.modeNote.oneway": "// entries get a Path Signal, exits only Block — direction is inferred from your layout",
+  "landing.cta": "Analyze network ▸",
+  "landing.demoLink": "no save handy? see a demo network ▸",
+  "landing.privacyLabel": "Privacy:",
+  "landing.privacyText": "the analysis runs entirely in your browser — your save never leaves your machine.",
+  "landing.footer": 'Fan project, not affiliated with Coffee Stain Studios. Map © Satisfactory.<br>Open to contributions — <a href="https://github.com/dvduardo/sinaleiro" target="_blank" rel="noopener">github.com/dvduardo/sinaleiro</a>.',
+  "landing.invalidFile": (name: string) => `"${name}" is not a .sav file.`,
+  "landing.error.invalid-save.title": "We couldn't read that file.",
+  "landing.error.invalid-save.hint": "Check that it's a Satisfactory save (.sav) — usually in %LocalAppData%/FactoryGame/Saved/SaveGames.",
+  "landing.error.no-rails.title": "The save was read, but it has no train tracks.",
+  "landing.error.no-rails.hint": "Build a railway in your world and save again — then we'll have something to signal.",
+  "landing.error.pyodide-load.title": "Failed to load the analysis engine.",
+  "landing.error.pyodide-load.hint": "Check your connection and reload the page — the download only happens once.",
+  "landing.error.internal.title": "Something went wrong during analysis.",
+  "landing.error.internal.hint": "Try again; if it persists, the save may be too large for this device — try on desktop.",
+
+  // loading.ts
+  "loading.banner": "FICSIT OS v2.7 — railway module",
+  "loading.received": (name: string, mb: string) => `save received: <b>${name}</b> (${mb} MB)`,
+  "loading.progress": "Progress",
+  "loading.stage.pyodide": "loading FICSIT railway module…",
+  "loading.stage.bundle": "assembling the analysis pipeline…",
+  "loading.stage.read": "reading the save file…",
+  "loading.stage.parse": "unpacking and rebuilding the rail network…",
+  "loading.stage.graph": "building the track and junction graph…",
+  "loading.stage.directions": "inferring track direction from the layout…",
+  "loading.stage.signals": "placing signals at each junction…",
+  "loading.stage.serialize": "preparing the interactive map…",
+
+  // results.ts
+  "results.demoName": "demo network",
+  "results.modeAria": "Track mode",
+  "results.mode.mixed": "⇆ Mixed",
+  "results.mode.bidirectional": "⇄ Bidirectional",
+  "results.mode.oneway": "→ One-way",
+  "results.export": "⭳ Checklist .txt",
+  "results.new": "New save",
+  "results.legend.junction": "Junction — click the pin to open the lens",
+  "results.legend.path": "Existing signal (Path)",
+  "results.legend.block": "Existing signal (Block)",
+  "results.legend.station": "Station",
+  "results.legend.bidirectional": "Bidirectional track (dashed = assumed)",
+  "results.legend.stub": "Unfinished line",
+  "results.reanalyzing": "recalculating signals…",
+  "results.sidebarAria": "Installation plan",
+  "results.stat.signals": "signals",
+  "results.stat.junctions": "junctions",
+  "results.stat.stations": "stations",
+  "results.stat.oneway": "one-way",
+  "results.stat.bidirectional": "bidirectional",
+  "results.stat.assumed": "assumed",
+  "results.stat.stubs": "unfinished",
+  "results.stat.suspectJunctions": "suspect junctions",
+  "results.stat.inferredHand": "direction inferred",
+  "results.stat.ambiguous": "ambiguous",
+
+  // sidebar.ts
+  "sidebar.title": "Installation plan",
+  "sidebar.count": (n: number) => `of ${n} signals installed`,
+  "sidebar.junction": (label: string, warn: boolean) => `Junction ${label}${warn ? " ⚠" : ""}`,
+  "sidebar.nearStation": (name: string) => `near "${name}"`,
+  "sidebar.noStation": "no station nearby",
+  "sidebar.lupa": "Lens",
+  "sidebar.checkAria": "Mark as placed",
+  "sidebar.type.path": "Path",
+  "sidebar.type.block": "Block",
+  "sidebar.facing.entry": "facing the junction",
+  "sidebar.facing.exit": "facing outward",
+  "sidebar.bidirectionalSuffix": " (bidirectional stretch)",
+
+  // lens.ts
+  "lens.aria": "Junction lens",
+  "lens.flag.oneway": "one-way",
+  "lens.flag.stub": "unfinished arm",
+  "lens.flag.crossing": "⚠ crossing",
+  "lens.title": (label: string, n: number, flags: string) =>
+    `Junction ${label} · ${n} ${n === 1 ? "signal" : "signals"}${flags ? " · " + flags : ""}`,
+  "lens.near": (m: number, name: string) => `${m} m from "${name}"`,
+  "lens.noStation": "no station nearby",
+  "lens.copy": "copy X Y",
+  "lens.copied": "copied ✓",
+  "lens.closeAria": "Close panel",
+  "lens.approachLabel": (dir: string) => dir,
+  "lens.dim": (m: string) => `≈ ${m} m`,
+  "lens.legend.path": "Path (green) — the arrow is the direction of the train that will read the signal: it points TOWARD the junction",
+  "lens.legend.block.oneway": "Block (amber) on exits, pointing outward",
+  "lens.legend.block.mixed": "Block (amber) — on one-way exits and on the bidirectional arm pair, pointing OUTWARD",
+  "lens.legend.block.bidirectional": "Block (amber) — same post, opposite side of the track, pointing OUTWARD",
+  "lens.step.where": (near: string) => `<b>Where:</b> go to the coordinate above${near}.`,
+  "lens.step.whereNear": (m: number, name: string) => ` — ${m} m from the station "${name}"`,
+  "lens.step.distance": (setback: string) => `<b>Distance:</b> on each arriving track, stop ≈${setback} m before the meeting point.`,
+  "lens.step.onlyPath": "<b>Path only:</b> the whole crossing is a single block — no signal inside it; each entry gets a Path Signal facing the X.",
+  "lens.step.oneway": "<b>One signal per post:</b> follow the arrows — the entry gets only the Path Signal (facing the junction) and each exit only the Block Signal (facing outward).",
+  "lens.step.mixed": "<b>Per arm:</b> a one-way arm gets a single signal (follow the arrow); a bidirectional arm gets the Path + Block pair on the same post, one for each side.",
+  "lens.step.bidirectional": "<b>Side and direction:</b> facing the junction, the <b>Path Signal</b> sits on your right, facing it. The <b>Block Signal</b> goes on the same post, on the other side of the track, facing outward.",
+  "lens.note.crossing": "⚠ Junctions with 4+ approaches are the main deadlock risk — check that no train can stop on top of the crossing.",
+  "lens.note.ambiguous": "The direction of one of the tracks couldn't be inferred — it falls back to the full Path + Block pair and the track shows dashed on the map. Check the layout.",
+  "lens.note.assumed": "One of the arms has no direction evidence and was treated as bidirectional (dashed in the schematic and on the map) — the full pair is safe either way.",
+  "lens.note.stub": (n: number) => n === 1
+    ? "One arm of this junction is an unfinished line (gray on the map) and got no recommendation — connect the line and re-analyze."
+    : `${n} arms of this junction are unfinished lines (gray on the map) and got no recommendation — connect the line and re-analyze.`,
+  "lens.note.rightHand": "A rule the site already handles for you: in-game, a signal only applies to the train passing it on its right — that's why each side of the track has its own.",
+
+  // mapView.ts
+  "map.stationTitle": (name: string) => name,
+  "map.existingSignal.path": "Existing signal (Path)",
+  "map.existingSignal.block": "Existing signal (Block)",
+
+  // compass
+  "compass": {
+    norte: "north", nordeste: "northeast", leste: "east", sudeste: "southeast",
+    sul: "south", sudoeste: "southwest", oeste: "west", noroeste: "northwest",
+  },
+
+  // export.ts
+  "export.filename.mixed": "recommended_signals_mixed.txt",
+  "export.filename.oneway": "recommended_signals_oneway.txt",
+  "export.filename.bidirectional": "recommended_signals.txt",
+
+  // report.ts (checklist .txt)
+  "report.mode.mixed": "mixed (one-way and bidirectional detected per track)",
+  "report.mode.oneway": "one-way (right-hand)",
+  "report.mode.bidirectional": "bidirectional",
+  "report.header.modeLine": (modeTxt: string) => `Mode: ${modeTxt}`,
+  "report.header.counts": (total: number, path: number, block: number) =>
+    `${total} recommended signals — ${path} Path Signal, ${block} Block Signal`,
+  "report.header.tracksMixed": (oneway: number, biConfirmed: number, biAssumed: number, stub: number) =>
+    `Tracks: ${oneway} one-way · ${biConfirmed} confirmed bidirectional · ${biAssumed} assumed bidirectional · ${stub} unfinished`,
+  "report.header.directions": (known: number, total: number) =>
+    `Directions: ${known}/${total} tracks inferred; ${total - known} ambiguous`,
+  "report.station": (m: number, name: string) => `${m}m from '${name}'`,
+  "report.noStation": "no station registered nearby",
+  "report.line": (i: number, namePt: string, type: string, junction: string, role: string, x: number, y: number, z: number, station: string) =>
+    `${String(i).padStart(3, " ")}. [${namePt} (${type}) · ${junction} · ${role}] X=${x} Y=${y} Z=${z}  (${station})`,
+  "report.reason": (m: string) => `     reason: ${m}`,
+  "report.reason.entry": (dir: string, label: string, degree: number) =>
+    `${dir} entry of junction ${label} (${degree} tracks meet). Place it facing TOWARD the junction.`,
+  "report.reason.exit": (dir: string, label: string) =>
+    `${dir} exit of junction ${label} — closes the junction block and releases it as soon as the train clears it. Place at the same point, facing OUTWARD from the junction.`,
+  "report.reason.ambiguousSuffix": " NOTE: this track's direction could not be inferred — treated as bidirectional; check the layout.",
+  "report.reason.biConfirmedSuffix": " Bidirectional stretch (single track is mandatory): gets the full signal pair.",
+  "report.reason.biAssumedSuffix": " Track with no direction evidence — treated as bidirectional; the full pair is the safe choice.",
+  "report.assumedHeader": "ASSUMED BIDIRECTIONAL STRETCHES (no direction evidence — full pair applied):",
+  "report.assumedLine": (track: string, where: string) => `  - track ${track} (${where})`,
+  "report.ambiguousHeader": "AMBIGUOUS STRETCHES (direction not inferred — treated as bidirectional):",
+  "report.ambiguousJunctionLine": (label: string, dir: string, track: string) =>
+    `  - ${label}, ${dir} approach (track ${track}): 2 signals issued; check the layout`,
+  "report.ambiguousOtherLine": (track: string, where: string) => `  - track ${track} (away from junctions, ${where})`,
+  "report.approxStation": (m: number, name: string) => `~${m}m from '${name}'`,
+
+  "role.entry": "entry",
+  "role.exit": "exit",
+  "signal.path": "Path Signal",
+  "signal.block": "Block Signal",
+};
