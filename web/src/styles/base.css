@@ -61,6 +61,28 @@ button { font: inherit; }
 .ptype.path { background: rgba(63, 191, 143, .16); color: var(--path); }
 .ptype.block { background: rgba(229, 169, 61, .16); color: var(--block); }
 
+/* seletor de idioma PT | EN — mesmo padrão visual dos botões de modo */
+.langtoggle {
+  display: flex;
+  border: 1px solid #3A3E44;
+  border-radius: 5px;
+  overflow: hidden;
+  flex: none;
+}
+.langtoggle button {
+  font-family: var(--disp);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  font-size: .68rem;
+  font-weight: 600;
+  background: none;
+  border: 0;
+  color: #9B968B;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.langtoggle button.on { background: var(--acc); color: var(--acc-ink); font-weight: 700; }
+
 .sr-only {
   position: absolute;
   width: 1px; height: 1px;

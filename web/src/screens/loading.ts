@@ -1,19 +1,9 @@
 // C-02 — mesa do despachante, âmbar FICSIT (aprovado)
 // O log e a barra são alimentados pelos estágios REAIS do worker.
 import type { Stage } from "../worker/protocol";
+import { t, fmtNum } from "../i18n";
 
 const N_BLOCKS = 18;
-
-const STAGE_LINES: Record<Stage, string> = {
-  pyodide: "carregando módulo ferroviário FICSIT…",
-  bundle: "montando pipeline de análise…",
-  read: "lendo o arquivo do save…",
-  parse: "descompactando e reconstruindo a malha ferroviária…",
-  graph: "montando grafo de trilhos e junções…",
-  directions: "inferindo a mão das vias pelo traçado…",
-  signals: "posicionando sinais em cada junção…",
-  serialize: "preparando o mapa interativo…",
-};
 
 let el: HTMLElement;
 let logEl: HTMLElement;
@@ -42,7 +32,7 @@ export function mountLoading(root: HTMLElement): void {
     </div>
     <div class="dlog" aria-live="polite"></div>
     <div class="dbar">
-      <span class="lbl">Progresso</span>
+      <span class="lbl">${t("loading.progress")}</span>
       <div class="blocks" aria-hidden="true"></div>
     </div>
   `;
@@ -59,13 +49,13 @@ export function mountLoading(root: HTMLElement): void {
 export function startLoading(fileName: string, sizeBytes: number): void {
   t0 = performance.now();
   lines = [];
-  pushLine("FICSIT OS v2.7 — módulo ferroviário");
-  pushLine(`save recebido: <b>${escapeHtml(fileName)}</b> (${(sizeBytes / 1e6).toFixed(1).replace(".", ",")} MB)`);
+  pushLine(t("loading.banner"));
+  pushLine(t("loading.received")(escapeHtml(fileName), fmtNum(sizeBytes / 1e6)));
   render(0);
 }
 
 export function loadingProgress(stage: Stage, pct: number): void {
-  pushLine(STAGE_LINES[stage]);
+  pushLine(t(`loading.stage.${stage}` as const));
   render(pct);
 }
 

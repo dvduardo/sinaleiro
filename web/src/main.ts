@@ -7,16 +7,17 @@ import "./styles/lens.css";
 
 import type { AnalysisPayload, Mode } from "./types";
 import { analyze, warmup, onProgress, AnalysisError } from "./pipeline/analyzer";
-import { mountLanding, showError } from "./screens/landing";
+import { mountLanding, showError, rerenderLanding } from "./screens/landing";
 import { mountLoading, startLoading, loadingProgress } from "./screens/loading";
-import { mountResults, showResults } from "./screens/results";
+import { mountResults, showResults, rerenderResults } from "./screens/results";
+import { t, locale, onLangChange } from "./i18n";
 
 type ScreenName = "landing" | "loading" | "results";
 
 const app = document.getElementById("app")!;
 app.innerHTML = `
   <section class="screen landing" id="scr-landing"></section>
-  <section class="screen loading" id="scr-loading" aria-label="Analisando o save"></section>
+  <section class="screen loading" id="scr-loading"></section>
   <section class="screen results" id="scr-results"></section>
 `;
 
@@ -26,11 +27,24 @@ const screens: Record<ScreenName, HTMLElement> = {
   results: document.getElementById("scr-results")!,
 };
 
+document.documentElement.lang = locale();
+document.title = t("app.title");
+screens.loading.setAttribute("aria-label", t("loading.screenAria"));
+
+let current: ScreenName = "landing";
+
 function show(name: ScreenName): void {
+  current = name;
   (Object.keys(screens) as ScreenName[]).forEach((k) => {
     screens[k].classList.toggle("on", k === name);
   });
 }
+
+onLangChange(() => {
+  screens.loading.setAttribute("aria-label", t("loading.screenAria"));
+  if (current === "landing") rerenderLanding();
+  else if (current === "results") rerenderResults();
+});
 
 // tempo mínimo na tela de carregamento, para o painel não "piscar" quando o
 // Pyodide já está quente e o save é pequeno
@@ -62,7 +76,7 @@ mountLanding(screens.landing, {
   // direto ao resultado, sem Pyodide; trocar de modo busca o outro JSON
   onDemo: async (mode) => {
     try {
-      showResults(await fetchDemo(mode), await digest("demo"), "malha de demonstração", fetchDemo);
+      showResults(await fetchDemo(mode), await digest("demo"), "__demo__", fetchDemo);
       show("results");
     } catch (err) {
       showError("internal", String(err));

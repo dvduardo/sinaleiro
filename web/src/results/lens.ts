@@ -7,6 +7,7 @@
 // glifo cai naturalmente do lado direito desse trem — a regra do jogo.
 import { fmtXY } from "../map/calibration";
 import type { AnalysisPayload, Junction, Mode, Recommendation } from "../types";
+import { t, compass } from "../i18n";
 
 const CX = 150, CY = 100;      // centro do esquemático (viewBox 300×200)
 const SPOKE_R = 92;            // comprimento de cada aproximação
@@ -20,7 +21,7 @@ export function mountLens(host: HTMLElement, closed: () => void): void {
   onClose = closed;
   panel = document.createElement("aside");
   panel.className = "jpanel";
-  panel.setAttribute("aria-label", "Lupa de junção");
+  panel.setAttribute("aria-label", t("lens.aria"));
   host.appendChild(panel);
 }
 
@@ -39,23 +40,23 @@ export function openLens(payload: AnalysisPayload, junction: Junction): void {
   const allPath = recs.length > 0 && recs.every((r) => r.type === "Path");
 
   const flags: string[] = [];
-  if (oneway) flags.push("mão única");
-  if (stubArms > 0) flags.push("braço inacabado");
-  if (xCrossing) flags.push("⚠ cruzamento");
-  const title = `Junção ${junction.label} · ${recs.length} ${recs.length === 1 ? "sinal" : "sinais"}${flags.length ? " · " + flags.join(" · ") : ""}`;
+  if (oneway) flags.push(t("lens.flag.oneway"));
+  if (stubArms > 0) flags.push(t("lens.flag.stub"));
+  if (xCrossing) flags.push(t("lens.flag.crossing"));
+  const title = t("lens.title")(junction.label, recs.length, flags.join(" · "));
 
   const near = recs[0]?.nearest_station
-    ? `${Math.round(recs[0].nearest_station_m ?? 0)} m de "${recs[0].nearest_station}"`
-    : "sem estação próxima";
+    ? t("lens.near")(Math.round(recs[0].nearest_station_m ?? 0), recs[0].nearest_station)
+    : t("lens.noStation");
 
   panel.innerHTML = `
     <div class="jp-head">
       <h4>${escapeHtml(title)}
         <span class="jps">${fmtXY(junction.x, junction.y)} · ${escapeHtml(near)}
-          <button type="button" class="jp-copy" data-copy="${junction.x} ${junction.y}">copiar X Y</button>
+          <button type="button" class="jp-copy" data-copy="${junction.x} ${junction.y}">${t("lens.copy")}</button>
         </span>
       </h4>
-      <button type="button" class="jp-x" aria-label="Fechar painel">✕</button>
+      <button type="button" class="jp-x" aria-label="${t("lens.closeAria")}">✕</button>
     </div>
     <div class="jp-body">
       ${schematicSvg(recs, mode)}
@@ -72,8 +73,8 @@ export function openLens(payload: AnalysisPayload, junction: Junction): void {
   panel.querySelector<HTMLButtonElement>(".jp-copy")!.addEventListener("click", (e) => {
     const btn = e.currentTarget as HTMLButtonElement;
     navigator.clipboard?.writeText(btn.dataset.copy ?? "").then(() => {
-      btn.textContent = "copiado ✓";
-      setTimeout(() => { btn.textContent = "copiar X Y"; }, 1500);
+      btn.textContent = t("lens.copied");
+      setTimeout(() => { btn.textContent = t("lens.copy"); }, 1500);
     });
   });
 
@@ -153,7 +154,7 @@ function schematicSvg(recs: Recommendation[], mode: Mode): string {
     parts.push(`<line class="sdim" x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}"/>`);
     const setback = first.recs[0].setback_m;
     const tx = (ax + bx) / 2 + px * 12, ty = (ay + by) / 2 + py * 12;
-    parts.push(`<text class="sdimt" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle">≈ ${fmtM(setback)} m</text>`);
+    parts.push(`<text class="sdimt" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle">${t("lens.dim")(fmtM(setback))}</text>`);
   }
 
   // glifos de sinal
@@ -176,7 +177,7 @@ function schematicSvg(recs: Recommendation[], mode: Mode): string {
     // rótulo da direção da aproximação, na ponta do raio
     const lx = CX + ux * (SPOKE_R + 2) + 4, ly = CY + uy * (SPOKE_R + 2);
     const anchor = ux < -0.3 ? "end" : ux > 0.3 ? "start" : "middle";
-    parts.push(`<text class="slbl" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}">${escapeHtml(spoke.recs[0].approach_dir)}</text>`);
+    parts.push(`<text class="slbl" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}">${escapeHtml(compass(spoke.recs[0].approach_dir))}</text>`);
   }
 
   return `<svg viewBox="0 0 300 200" aria-hidden="true">${parts.join("")}</svg>`;
@@ -189,15 +190,15 @@ function legendHtml(recs: Recommendation[], mode: Mode): string {
   const hasBlock = recs.some((r) => r.type === "Block");
   const rows: string[] = [];
   if (hasPath) {
-    rows.push(`<span><i class="lp"></i>Trajeto (verde) — a seta é o sentido do trem que vai ler o sinal: aponta PARA a junção</span>`);
+    rows.push(`<span><i class="lp"></i>${t("lens.legend.path")}</span>`);
   }
   if (hasBlock) {
     if (mode === "oneway") {
-      rows.push(`<span><i class="lb"></i>Trecho (âmbar) nas saídas, apontando no sentido de saída</span>`);
+      rows.push(`<span><i class="lb"></i>${t("lens.legend.block.oneway")}</span>`);
     } else if (mode === "mixed") {
-      rows.push(`<span><i class="lb"></i>Trecho (âmbar) — nas saídas de mão única e no par dos braços bidirecionais, apontando PARA FORA</span>`);
+      rows.push(`<span><i class="lb"></i>${t("lens.legend.block.mixed")}</span>`);
     } else {
-      rows.push(`<span><i class="lb"></i>Trecho (âmbar) — mesmo poste, lado oposto do trilho, apontando PARA FORA</span>`);
+      rows.push(`<span><i class="lb"></i>${t("lens.legend.block.bidirectional")}</span>`);
     }
   }
   return `<div class="jp-leg">${rows.join("")}</div>`;
@@ -211,21 +212,21 @@ function stepsHtml(
   allPath: boolean,
 ): string {
   const near = recs[0]?.nearest_station
-    ? ` — ${Math.round(recs[0].nearest_station_m ?? 0)} m da estação "${escapeHtml(recs[0].nearest_station!)}"`
+    ? t("lens.step.whereNear")(Math.round(recs[0].nearest_station_m ?? 0), escapeHtml(recs[0].nearest_station))
     : "";
   const setback = fmtM(recs[0]?.setback_m ?? 20);
   const steps: string[] = [
-    `<li><b>Onde:</b> vá até a coordenada acima${near}.</li>`,
-    `<li><b>Distância:</b> em cada trilho que chega, pare ≈${setback} m antes do ponto de encontro.</li>`,
+    `<li>${t("lens.step.where")(near)}</li>`,
+    `<li>${t("lens.step.distance")(setback)}</li>`,
   ];
   if (xCrossing && allPath) {
-    steps.push(`<li><b>Só Trajeto:</b> o cruzamento inteiro é um bloco único — nenhum sinal dentro dele; cada entrada recebe um Trajeto virado para o X.</li>`);
+    steps.push(`<li>${t("lens.step.onlyPath")}</li>`);
   } else if (mode === "oneway") {
-    steps.push(`<li><b>Um sinal por poste:</b> siga as setas — a entrada recebe só o Trajeto (virado para a junção) e cada saída só o Trecho (virado para fora).</li>`);
+    steps.push(`<li>${t("lens.step.oneway")}</li>`);
   } else if (mode === "mixed") {
-    steps.push(`<li><b>Por braço:</b> braço de mão única recebe um sinal só (siga a seta); braço bidirecional recebe o par Trajeto + Trecho no mesmo poste, um para cada lado.</li>`);
+    steps.push(`<li>${t("lens.step.mixed")}</li>`);
   } else {
-    steps.push(`<li><b>Lado e sentido:</b> olhando para a junção, o <b>Trajeto</b> fica do seu lado direito, virado para ela. O <b>Trecho</b> vai no mesmo poste, do outro lado do trilho, virado para fora.</li>`);
+    steps.push(`<li>${t("lens.step.bidirectional")}</li>`);
   }
   void junction;
   return `<ol class="jp-steps">${steps.join("")}</ol>`;
@@ -241,19 +242,19 @@ function notesHtml(
 ): string {
   const notes: string[] = [];
   if (xCrossing) {
-    notes.push(`<p class="jp-note warn">⚠ Junções de 4+ aproximações são o principal ponto de deadlock — confira se nenhum trem consegue parar em cima do cruzamento.</p>`);
+    notes.push(`<p class="jp-note warn">${t("lens.note.crossing")}</p>`);
   }
   if (hasAmb) {
-    notes.push(`<p class="jp-note">A mão de um dos trilhos não pôde ser inferida — ele volta ao par completo Trajeto + Trecho e o trilho aparece tracejado no mapa. Confira o traçado.</p>`);
+    notes.push(`<p class="jp-note">${t("lens.note.ambiguous")}</p>`);
   }
   if (hasAssumed) {
-    notes.push(`<p class="jp-note">Um dos braços não tem evidência de mão e foi tratado como bidirecional (tracejado no esquema e no mapa) — o par completo é seguro em qualquer caso.</p>`);
+    notes.push(`<p class="jp-note">${t("lens.note.assumed")}</p>`);
   }
   if (stubArms > 0) {
-    notes.push(`<p class="jp-note">${stubArms === 1 ? "Um braço desta junção é uma linha inacabada (cinza no mapa) e não recebeu recomendação" : `${stubArms} braços desta junção são linhas inacabadas (cinza no mapa) e não receberam recomendação`} — conecte a linha e reanalise.</p>`);
+    notes.push(`<p class="jp-note">${t("lens.note.stub")(stubArms)}</p>`);
   }
   if (mode !== "oneway" || !allPath) {
-    notes.push(`<p class="jp-note">Regra que o site já resolve por você: no jogo, um sinal só vale para o trem que passa por ele à direita — por isso cada lado do trilho tem o seu.</p>`);
+    notes.push(`<p class="jp-note">${t("lens.note.rightHand")}</p>`);
   }
   return notes.join("");
 }
