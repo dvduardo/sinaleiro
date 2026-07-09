@@ -29,6 +29,9 @@ STATION_TYPE_PATHS = {
     "/Game/FactoryGame/Buildable/Factory/Train/Station/Build_TrainPlatformEmpty.Build_TrainPlatformEmpty_C",
 }
 STATION_IDENTIFIER_TYPE_PATH = "/Script/FactoryGame.FGTrainStationIdentifier"
+# One BP_Train actor per consist (locomotives + wagons are separate actors of
+# their own); counting them is enough to seed the "trains per line" control.
+TRAIN_TYPE_PATH = "/Game/FactoryGame/Buildable/Vehicle/Train/-Shared/BP_Train.BP_Train_C"
 
 
 @dataclass
@@ -106,6 +109,7 @@ class RailNetwork:
     stations: list  # list[Station]
     signals: list  # list[Signal]
     buildings: list  # list[Building] - other buildables, for background context only
+    trains: int = 0  # number of consists (BP_Train actors) in the save
 
 
 GENERIC_BUILDING_PREFIX = "/Game/FactoryGame/Buildable/"
@@ -175,6 +179,7 @@ def parse_rail_network(save_path: str) -> RailNetwork:
     stations: list[Station] = []
     signals: list[Signal] = []
     buildings: list[Building] = []
+    trains = 0
     station_names: dict[str, str] = {}  # station instance_name -> readable name
 
     for level in parsed.levels:
@@ -233,6 +238,9 @@ def parse_rail_network(save_path: str) -> RailNetwork:
                     if text:
                         station_names[station_ref.pathName] = text
 
+            elif type_path == TRAIN_TYPE_PATH:
+                trains += 1
+
             elif type_path.startswith(GENERIC_BUILDING_PREFIX) and not type_path.startswith(
                     GENERIC_BUILDING_EXCLUDE_PREFIXES):
                 buildings.append(Building(instance_name=header.instanceName, position=list(header.position)))
@@ -250,7 +258,7 @@ def parse_rail_network(save_path: str) -> RailNetwork:
         station.name = station_names.get(station.instance_name)
 
     return RailNetwork(tracks=tracks, connections=connections, stations=stations, signals=signals,
-                       buildings=buildings)
+                       buildings=buildings, trains=trains)
 
 
 if __name__ == "__main__":
@@ -259,6 +267,7 @@ if __name__ == "__main__":
         sys.exit(1)
     network = parse_rail_network(sys.argv[1])
     print(f"tracks={len(network.tracks)} connections={len(network.connections)} "
-          f"stations={len(network.stations)} signals={len(network.signals)}")
+          f"stations={len(network.stations)} signals={len(network.signals)} "
+          f"trains={network.trains}")
     for station in network.stations[:5]:
         print(" station:", station)

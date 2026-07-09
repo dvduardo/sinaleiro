@@ -16,6 +16,8 @@ from parse_save import parse_rail_network
 from graph import build_graph
 from directions import infer_directions
 from classify import classify_tracks
+from coverage import build_coverage
+from line_signals import plan_line_signals
 from signal_rules import recommend_signals, junctions_with_labels, SIGNAL_SETBACK_CM
 from geometry import (
     sample_track, distance, point_at_arc_length, tangent_at_arc_length,
@@ -23,7 +25,7 @@ from geometry import (
 )
 from report import render_text_report, count_inconsistent_junctions, _flow_arrows
 
-PAYLOAD_VERSION = 2
+PAYLOAD_VERSION = 3
 
 
 class InvalidSaveError(ValueError):
@@ -36,6 +38,7 @@ class NoRailsError(ValueError):
 
 _network = None
 _graph = None
+_coverage = None  # audit of existing signals; mode-independent, built once per save
 
 
 def _progress(callback, stage: str) -> None:
@@ -45,7 +48,8 @@ def _progress(callback, stage: str) -> None:
 
 def load_save(save_bytes, progress=None) -> None:
     """Parse the raw .sav bytes and build the rail graph (module globals)."""
-    global _network, _graph
+    global _network, _graph, _coverage
+    _coverage = None
     _progress(progress, "parse")
     # the vendored parser only accepts a filename; under Pyodide this lands
     # in the in-memory Emscripten FS, so there is no real disk I/O. The name
@@ -69,11 +73,17 @@ def load_save(save_bytes, progress=None) -> None:
     _network = network
 
 
-def analyze(mode: str, progress=None) -> str:
+DEFAULT_TRAINS_TARGET = 2
+
+
+def analyze(mode: str, trains_target: int = DEFAULT_TRAINS_TARGET, progress=None) -> str:
     """Run the signal recommendation for the already-loaded save and return
-    the payload as a JSON string. mode: "mixed" | "bidirectional" | "oneway"."""
+    the payload as a JSON string. mode: "mixed" | "bidirectional" | "oneway".
+    trains_target: how many trains each one-way run should hold — drives the
+    line-signal gap-fill (only meaningful in the modes that know the flow)."""
     if _graph is None:
         raise RuntimeError("chame load_save() antes de analyze()")
+    trains_target = max(1, int(trains_target))
     directions = None
     classes = None
     if mode == "oneway":
@@ -82,16 +92,31 @@ def analyze(mode: str, progress=None) -> str:
     elif mode == "mixed":
         _progress(progress, "directions")  # same loading-screen stage id
         classes = classify_tracks(_graph, _network)
+    global _coverage
+    if _coverage is None:
+        _coverage = build_coverage(_graph, _network)
     _progress(progress, "signals")
-    recommendations = recommend_signals(_graph, directions, classes)
+    recommendations = recommend_signals(_graph, directions, classes, _coverage)
+    # line signals need per-track flow: mixed has it in classes, oneway in
+    # directions; plain bidirectional mode has none, so no gap-fill there.
+    line_signals, loop_hints, line_runs = [], [], []
+    kinds = classes
+    if kinds is None and directions is not None:
+        kinds = {name: (("oneway", d) if d is not None else ("bi_assumed", None))
+                 for name, d in directions.items()}
+    if kinds is not None:
+        line_signals, loop_hints, line_runs = plan_line_signals(
+            _graph, kinds, _coverage, trains_target)
     _progress(progress, "serialize")
-    payload = _build_payload(_network, _graph, recommendations, directions, classes, mode)
+    payload = _build_payload(_network, _graph, recommendations, directions, classes, mode,
+                             line_signals, loop_hints, trains_target, line_runs)
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
-def analyze_bytes(save_bytes, mode: str, progress=None) -> str:
+def analyze_bytes(save_bytes, mode: str, trains_target: int = DEFAULT_TRAINS_TARGET,
+                  progress=None) -> str:
     load_save(save_bytes, progress=progress)
-    return analyze(mode, progress=progress)
+    return analyze(mode, trains_target, progress=progress)
 
 
 def _signal_angles(graph, rec):
@@ -121,7 +146,9 @@ def _signal_angles(graph, rec):
     return round(approach, 1), round(facing, 1), round(target / 100.0, 1)
 
 
-def _build_payload(network, graph, recommendations, directions, classes, mode):
+def _build_payload(network, graph, recommendations, directions, classes, mode,
+                   line_signals=(), loop_hints=(), trains_target=DEFAULT_TRAINS_TARGET,
+                   line_runs=()):
     junctions_meta = junctions_with_labels(graph)
     # flow arrows and junction audits only look at the one-way stretches
     flow_directions = directions
@@ -147,6 +174,8 @@ def _build_payload(network, graph, recommendations, directions, classes, mode):
             "facing_deg": facing_deg,
             "setback_m": setback_m,
             "ambiguous": rec.ambiguous,
+            "status": rec.status,
+            "current_type": rec.current_type,
             "reason": rec.reason,
             "nearest_station": rec.nearest_station_name,
             "nearest_station_m": round(rec.nearest_station_distance_m, 1)
@@ -205,10 +234,21 @@ def _build_payload(network, graph, recommendations, directions, classes, mode):
         "junctions": len(junctions_meta),
         "stations": len(stations_json),
         "existing_signals": len(network.signals),
+        "existing_path": sum(1 for s in network.signals if s.is_path_signal),
+        "existing_block": sum(1 for s in network.signals if not s.is_path_signal),
         "recommendations": len(recommendations),
         "path": sum(1 for r in recommendations if r.signal_type == "Path"),
         "block": sum(1 for r in recommendations if r.signal_type == "Block"),
         "ambiguous": sum(1 for r in recommendations if r.ambiguous),
+        # audit against existing signals (see coverage.py)
+        "missing": sum(1 for r in recommendations if r.status == "missing"),
+        "retype": sum(1 for r in recommendations if r.status == "retype"),
+        "ok": sum(1 for r in recommendations if r.status == "ok"),
+        # line-signal gap-fill (see line_signals.py)
+        "trains": network.trains,
+        "trains_target": trains_target,
+        "line_signals": len(line_signals),
+        "passing_loop_hints": len(loop_hints),
     }
     flow_json = []
     if classes is not None:
@@ -243,8 +283,26 @@ def _build_payload(network, graph, recommendations, directions, classes, mode):
         "existing_signals": existing_json,
         "junctions": junctions_json,
         "recommendations": recs_json,
+        "line_signals": [
+            {"id": i, "run": s.run_id,
+             "x": round(s.position[0]), "y": round(s.position[1]), "z": round(s.position[2]),
+             "facing_deg": s.facing_deg, "arc_m": s.arc_m, "block_m": s.block_m,
+             "reason": s.reason}
+            for i, s in enumerate(line_signals)
+        ],
+        "passing_loop_hints": [
+            {"x": round(h.position[0]), "y": round(h.position[1]), "length_m": h.length_m}
+            for h in loop_hints
+        ],
+        "line_runs": [
+            {"run": r.run_id, "length_m": r.length_m,
+             "existing": [{"arc_m": arc, "type": "Path" if is_path else "Block"}
+                          for arc, is_path in r.existing]}
+            for r in line_runs
+        ],
         "text_report": render_text_report(recommendations, directions=directions, graph=graph,
-                                          classes=classes),
+                                          classes=classes, line_signals=line_signals,
+                                          loop_hints=loop_hints, trains_target=trains_target),
     }
 
 
@@ -253,7 +311,8 @@ if __name__ == "__main__":
     flags = [a for a in sys.argv[1:] if a.startswith("--")]
     positional = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not positional:
-        print("Usage: python3 src/web_api.py /path/to/save.sav [--misto|--mao-unica]", file=sys.stderr)
+        print("Usage: python3 src/web_api.py /path/to/save.sav [--misto|--mao-unica] [--trens=N]",
+              file=sys.stderr)
         sys.exit(1)
     with open(positional[0], "rb") as fh:
         data = fh.read()
@@ -263,4 +322,9 @@ if __name__ == "__main__":
         cli_mode = "oneway"
     else:
         cli_mode = "bidirectional"
-    print(analyze_bytes(data, cli_mode, progress=lambda s: print(f"[{s}]", file=sys.stderr)))
+    cli_target = DEFAULT_TRAINS_TARGET
+    for flag in flags:
+        if flag.startswith("--trens="):
+            cli_target = int(flag.split("=", 1)[1])
+    print(analyze_bytes(data, cli_mode, cli_target,
+                        progress=lambda s: print(f"[{s}]", file=sys.stderr)))

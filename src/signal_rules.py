@@ -28,7 +28,6 @@ from graph import RailGraph, Node
 from parse_save import Track
 
 
-SIGNAL_MATCH_TOLERANCE_CM = 300.0  # 3m, in Satisfactory's cm-based world units
 SIGNAL_SETBACK_CM = 2000.0  # place recommendations 20m into each approach track
 
 COMPASS_PT = ["norte", "nordeste", "leste", "sudeste", "sul", "sudoeste", "oeste", "noroeste"]
@@ -52,6 +51,11 @@ class SignalRecommendation:
     # ambiguous=True — in mixed mode a bidirectional track is a normal
     # result, not an alert.
     track_kind: str | None = None
+    # audit against existing signals (see coverage.py). "missing" = nothing on
+    # this arm; "ok" = the recommended type is already there; "retype" = a
+    # signal exists but of the other type (review, may be intentional).
+    status: str = "missing"
+    current_type: str | None = None  # the existing signal's type when ok/retype
 
     @property
     def name_pt(self) -> str:
@@ -131,15 +135,6 @@ def _nearest_station(position, stations):
     return best_name, best_dist
 
 
-def _has_nearby_signal(position, signals, signal_type):
-    for signal in signals:
-        if signal.is_path_signal != (signal_type == "Path"):
-            continue
-        if _distance(position, signal.position) <= SIGNAL_MATCH_TOLERANCE_CM:
-            return True
-    return False
-
-
 def junctions_with_labels(graph: RailGraph) -> list:
     """Junction nodes (3+ tracks meeting) as (label, node, world_pos) tuples,
     with stable numbering so labels don't shuffle between runs."""
@@ -156,18 +151,56 @@ def junctions_with_labels(graph: RailGraph) -> list:
     return [(f"J{i}", node, junction_pos(node)) for i, node in enumerate(junctions, 1)]
 
 
+def _type_pt(signal_type: str) -> str:
+    return "Sinal de Trajeto" if signal_type == "Path" else "Sinal de Trecho"
+
+
+def _status_note(status: str, current: str | None, want: str) -> str:
+    """Human note appended to the reason, so the CLI/text report explains the
+    audit result too (the web UI also renders status structurally)."""
+    if status == "ok":
+        return f" JÁ RESOLVIDO: você já tem um {_type_pt(want)} aqui."
+    if status == "retype":
+        why = ("um Sinal de Trajeto na entrada da junção evita travamento (deadlock)"
+               if want == "Path" else
+               "um Sinal de Trecho na saída basta e libera o bloco mais rápido")
+        return (f" REVISAR: você já tem um {_type_pt(current or '')} aqui; "
+                f"considere trocar por {_type_pt(want)} — {why}. Pode ser intencional.")
+    return ""
+
+
+def _audit_status(coverage, node_id, track_name, want_type):
+    """(status, current_type) of a recommendation against existing signals.
+    "ok" = the wanted type is already on this arm; "retype" = the other type
+    is there instead; "missing" = nothing. coverage=None disables the audit
+    (everything reads as missing, i.e. the pre-audit behaviour)."""
+    if coverage is None:
+        return "missing", None
+    types = coverage.approach_types(node_id, track_name)
+    if want_type in types:
+        return "ok", want_type
+    other = "Block" if want_type == "Path" else "Path"
+    if other in types:
+        return "retype", other
+    return "missing", None
+
+
 def recommend_signals(graph: RailGraph, directions: dict | None = None,
-                      classes: dict | None = None) -> list:
+                      classes: dict | None = None, coverage=None) -> list:
     """directions=None (bidirectional mode) keeps the historic behavior of one
     entry + one exit signal per junction approach. With a directions dict
     (track_name -> +1/-1/None, see directions.py) each approach gets only the
     signal its inferred flow calls for. With a classes dict (mixed mode, see
     classify.py) each approach follows its own classification: one-way arms
     get a single signal, bidirectional arms the full pair, and unfinished
-    stubs get nothing at all."""
+    stubs get nothing at all.
+
+    coverage (see coverage.py) audits each recommendation against the signals
+    already in the save: instead of dropping duplicates, every approach is
+    emitted tagged status ok/retype/missing so the UI can stay calm on an
+    already-signalled network and only surface what actually needs action."""
     recommendations: list[SignalRecommendation] = []
     stations = graph.network.stations
-    signals = graph.network.signals
 
     for label, node, j_pos in junctions_with_labels(graph):
         for track_name in sorted(node.edge_track_names):
@@ -225,23 +258,30 @@ def recommend_signals(graph: RailGraph, directions: dict | None = None,
                 "como bidirecional; confira o traçado."
             ) if ambiguous else kind_note
             # Entry signal: protects trains arriving through this branch.
-            if "entrada" in roles and not _has_nearby_signal(position, signals, "Path"):
+            if "entrada" in roles:
+                status, current = _audit_status(coverage, node.node_id, track_name, "Path")
                 recommendations.append(SignalRecommendation(
                     signal_type="Path",
                     role="entrada",
                     reason=(f"Entrada {approach_dir} da junção {label} ({node.degree} trilhos se encontram). "
-                            f"Coloque virado PARA a junção.{ambiguous_note}"),
+                            f"Coloque virado PARA a junção.{ambiguous_note}"
+                            f"{_status_note(status, current, 'Path')}"),
+                    status=status,
+                    current_type=current,
                     **common,
                 ))
             # Exit signal at the same joint, facing the other way: closes the
             # junction block so it is released as soon as the train clears it.
-            if "saída" in roles and not _has_nearby_signal(position, signals, "Block"):
+            if "saída" in roles:
+                status, current = _audit_status(coverage, node.node_id, track_name, "Block")
                 recommendations.append(SignalRecommendation(
                     signal_type="Block",
                     role="saída",
                     reason=(f"Saída {approach_dir} da junção {label} — fecha o bloco da junção e o libera "
                             f"assim que o trem sai. Coloque no mesmo ponto, virado PARA FORA da junção."
-                            f"{ambiguous_note}"),
+                            f"{ambiguous_note}{_status_note(status, current, 'Block')}"),
+                    status=status,
+                    current_type=current,
                     **common,
                 ))
 
@@ -263,8 +303,11 @@ if __name__ == "__main__":
     elif "--mao-unica" in sys.argv:
         from directions import infer_directions
         directions = infer_directions(graph)
-    recs = recommend_signals(graph, directions, classes)
-    print(f"{len(recs)} recomendacoes de sinal")
+    from coverage import build_coverage
+    coverage = build_coverage(graph, network)
+    recs = recommend_signals(graph, directions, classes, coverage)
+    by_status: dict[str, int] = {}
     for rec in recs:
-        loc = f"{rec.nearest_station_distance_m:.0f}m de '{rec.nearest_station_name}'" if rec.nearest_station_name else "sem estacao proxima"
-        print(f"  [{rec.junction_label} {rec.approach_dir:>8}] pos={[round(v) for v in rec.position]} ({loc})")
+        by_status[rec.status] = by_status.get(rec.status, 0) + 1
+    print(f"{len(recs)} recomendacoes de sinal — "
+          + " ".join(f"{k}={v}" for k, v in sorted(by_status.items())))

@@ -522,7 +522,8 @@ def _star_points(cx, cy, r_outer, r_inner, points=5):
     return " ".join(coords)
 
 
-def render_text_report(recommendations, directions=None, graph=None, classes=None) -> str:
+def render_text_report(recommendations, directions=None, graph=None, classes=None,
+                       line_signals=None, loop_hints=None, trains_target=None) -> str:
     counts = Counter(rec.signal_type for rec in recommendations)
     f = io.StringIO()
     if classes is not None:
@@ -537,6 +538,14 @@ def render_text_report(recommendations, directions=None, graph=None, classes=Non
         f"{counts.get('Path', 0)} Sinal de Trajeto (Path), "
         f"{counts.get('Block', 0)} Sinal de Trecho (Block)\n"
     )
+    status_counts = Counter(rec.status for rec in recommendations)
+    if any(rec.status != "missing" for rec in recommendations):
+        f.write(
+            f"Auditoria dos sinais que você já tem: "
+            f"{status_counts.get('missing', 0)} realmente faltando · "
+            f"{status_counts.get('retype', 0)} rever tipo · "
+            f"{status_counts.get('ok', 0)} já resolvidos\n"
+        )
     if classes is not None:
         kind_counts = Counter(kind for kind, _ in classes.values())
         f.write(
@@ -561,6 +570,8 @@ def render_text_report(recommendations, directions=None, graph=None, classes=Non
             f"({station_txt})\n"
             f"     motivo: {rec.reason}\n"
         )
+    if line_signals or loop_hints:
+        _write_line_signal_section(f, line_signals or [], loop_hints or [], trains_target)
     if classes is not None:
         _write_assumed_section(f, classes, graph)
     elif directions is not None:
@@ -568,10 +579,35 @@ def render_text_report(recommendations, directions=None, graph=None, classes=Non
     return f.getvalue()
 
 
-def generate_text_report(recommendations, out_path, directions=None, graph=None, classes=None):
+def _write_line_signal_section(f, line_signals, loop_hints, trains_target):
+    """Part B appendix: block signals suggested along one-way runs (gap-fill
+    respecting the blocks that already exist) and passing-loop hints for long
+    bidirectional stretches."""
+    f.write("\n" + "-" * 60 + "\n")
+    target_txt = f" (alvo: {trains_target} trens por corrida)" if trains_target else ""
+    f.write(f"SINAIS DE LINHA — preenchimento de lacunas{target_txt}:\n")
+    if not line_signals:
+        f.write("  Nenhum necessário: os blocos existentes já comportam o alvo.\n")
+    for i, s in enumerate(line_signals, 1):
+        f.write(
+            f"  {i:3d}. [Sinal de Trecho (Block) · corrida {s.run_id}] "
+            f"X={s.position[0]:.0f} Y={s.position[1]:.0f} Z={s.position[2]:.0f} "
+            f"(a {s.arc_m:.0f}m do início; bloco resultante ~{s.block_m:.0f}m)\n"
+        )
+    for h in loop_hints:
+        f.write(
+            f"  DICA: trecho bidirecional de {h.length_m:.0f}m em "
+            f"X={h.position[0]:.0f} Y={h.position[1]:.0f} — para cruzar trens em sentidos "
+            f"opostos, considere um desvio (passing loop) ou via dupla; não subdivida em blocos.\n"
+        )
+
+
+def generate_text_report(recommendations, out_path, directions=None, graph=None, classes=None,
+                         line_signals=None, loop_hints=None, trains_target=None):
     with open(out_path, "w") as f:
         f.write(render_text_report(recommendations, directions=directions, graph=graph,
-                                    classes=classes))
+                                    classes=classes, line_signals=line_signals,
+                                    loop_hints=loop_hints, trains_target=trains_target))
 
 
 def _write_assumed_section(f, classes, graph):
@@ -730,13 +766,36 @@ def main():
         print(f"Modo mão única: {known}/{len(directions)} trilhos com direção inferida; "
               f"{len(directions) - known} ambíguos (tratados como bidirecionais).")
         _warn_inconsistent_junctions(graph, directions)
-    recommendations = recommend_signals(graph, directions if classes is None else None, classes)
+    from coverage import build_coverage
+    coverage = build_coverage(graph, network)
+    recommendations = recommend_signals(graph, directions if classes is None else None, classes,
+                                        coverage)
+
+    # line-signal gap-fill (Part B) — needs per-track flow, so only the modes
+    # that infer it; the target comes from --trens=N (default 2 trains per run)
+    trains_target = 2
+    for flag in flags:
+        if flag.startswith("--trens="):
+            trains_target = max(1, int(flag.split("=", 1)[1]))
+    line_signals_list, loop_hints = [], []
+    if mode in ("mixed", "oneway"):
+        from line_signals import plan_line_signals
+        kinds = classes
+        if kinds is None:
+            kinds = {name: (("oneway", d) if d is not None else ("bi_assumed", None))
+                     for name, d in directions.items()}
+        line_signals_list, loop_hints, _runs = plan_line_signals(graph, kinds, coverage,
+                                                                 trains_target)
+        print(f"Sinais de linha (alvo {trains_target} trens por corrida): "
+              f"{len(line_signals_list)} sugeridos; {len(loop_hints)} dicas de desvio. "
+              f"Trens no save: {network.trains}.")
 
     html_path = f"{out_dir}/mapa_sinais.html"
     txt_path = f"{out_dir}/sinais_recomendados.txt"
     generate_html(network, graph, recommendations, html_path, directions=directions, classes=classes)
     generate_text_report(recommendations, txt_path, directions=directions, graph=graph,
-                         classes=classes)
+                         classes=classes, line_signals=line_signals_list, loop_hints=loop_hints,
+                         trains_target=trains_target)
     print(f"{len(recommendations)} recomendações geradas.")
     print(f"Mapa: {html_path}")
     print(f"Lista: {txt_path}")

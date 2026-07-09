@@ -16,6 +16,8 @@ const FILES = [
   "src/directions.py",
   "src/classify.py",
   "src/geometry.py",
+  "src/coverage.py",
+  "src/line_signals.py",
   "src/signal_rules.py",
   "src/report.py",
   "src/web_api.py",
