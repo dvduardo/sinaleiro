@@ -6,7 +6,7 @@
 // sentido do trem que vai LER o sinal; com rotate(facing − 90) o poste do
 // glifo cai naturalmente do lado direito desse trem — a regra do jogo.
 import { fmtXY } from "../map/calibration";
-import type { AnalysisPayload, Junction, Mode, Recommendation } from "../types";
+import type { AnalysisPayload, Junction, LineSignal, Mode, Recommendation } from "../types";
 import { t, compass } from "../i18n";
 
 const CX = 150, CY = 100;      // centro do esquemático (viewBox 300×200)
@@ -62,10 +62,58 @@ export function openLens(payload: AnalysisPayload, junction: Junction): void {
       ${schematicSvg(recs, mode)}
       ${legendHtml(recs, mode)}
       ${stepsHtml(recs, junction, mode, xCrossing, allPath)}
+      ${auditNoteHtml(recs)}
       ${notesHtml(mode, hasAmb, hasAssumed, stubArms, xCrossing, allPath)}
     </div>
   `;
 
+  panel.setAttribute("aria-label", t("lens.aria"));
+  bindPanelChrome();
+  panel.scrollTop = 0;
+  panel.classList.add("on");
+}
+
+/** Lupa de trecho: a corrida de mão única inteira como uma reta horizontal —
+ * fluxo da esquerda para a direita, sinais existentes como postes esmaecidos,
+ * sugeridos como losangos âmbar (o clicado ganha o anel). */
+export function openLineLens(payload: AnalysisPayload, signal: LineSignal): void {
+  const siblings = payload.line_signals.filter((s) => s.run === signal.run);
+  const run = (payload.line_runs ?? []).find((r) => r.run === signal.run);
+  // payload v3 em cache pode não ter line_runs: estima pelo último bloco
+  const lengthM = run?.length_m
+    ?? Math.max(...siblings.map((s) => s.arc_m + s.block_m));
+  const existing = run?.existing ?? [];
+
+  panel.innerHTML = `
+    <div class="jp-head">
+      <h4>${escapeHtml(t("lens.line.title")(Math.round(lengthM)))}
+        <span class="jps">${fmtXY(signal.x, signal.y)} · Z ${Math.round(signal.z / 100)} m
+          <button type="button" class="jp-copy" data-copy="${signal.x} ${signal.y}">${t("lens.copy")}</button>
+        </span>
+      </h4>
+      <button type="button" class="jp-x" aria-label="${t("lens.closeAria")}">✕</button>
+    </div>
+    <div class="jp-body">
+      ${lineSchematicSvg(signal, siblings, existing, lengthM)}
+      ${lineLegendHtml(existing.length > 0)}
+      <ol class="jp-steps">
+        <li>${t("lens.line.step.where")(Math.round(signal.arc_m))}</li>
+        <li>${t("lens.line.step.type")}</li>
+        <li>${t("lens.line.step.side")}</li>
+      </ol>
+      <p class="jp-note audit">${t("lens.line.note.block")(Math.round(signal.block_m), payload.stats.trains_target)}</p>
+      <p class="jp-note">${t("lens.line.note.ends")}</p>
+    </div>
+  `;
+
+  panel.setAttribute("aria-label", t("lens.line.aria"));
+  bindPanelChrome();
+  panel.scrollTop = 0;
+  panel.classList.add("on");
+}
+
+/** Fechar e copiar-coordenada — comuns às duas lupas. */
+function bindPanelChrome(): void {
   panel.querySelector(".jp-x")!.addEventListener("click", () => {
     closeLens();
     onClose?.();
@@ -77,9 +125,6 @@ export function openLens(payload: AnalysisPayload, junction: Junction): void {
       setTimeout(() => { btn.textContent = t("lens.copy"); }, 1500);
     });
   });
-
-  panel.scrollTop = 0;
-  panel.classList.add("on");
 }
 
 // ---------- geometria do esquemático ----------
@@ -167,8 +212,10 @@ function schematicSvg(recs: Recommendation[], mode: Mode): string {
       const rot = rec.facing_deg - 90;
       const lamp = rec.type === "Path" ? "slampP" : "slampB";
       const chev = rec.type === "Path" ? "schevP" : "schevB";
+      // sinal já ok fica esmaecido; retype ganha um anel de alerta
+      const stCls = rec.status === "ok" ? " sig-ok" : rec.status === "retype" ? " sig-retype" : "";
       parts.push(
-        `<g transform="translate(${gx.toFixed(1)} ${gy.toFixed(1)}) rotate(${rot.toFixed(1)})">` +
+        `<g class="sig${stCls}" transform="translate(${gx.toFixed(1)} ${gy.toFixed(1)}) rotate(${rot.toFixed(1)})">` +
         `<line class="spost" x1="0" y1="-20" x2="0" y2="-6"/>` +
         `<circle class="${lamp}" r="4.2"/>` +
         `<path class="schev ${chev}" d="M8 -4 l7 4 -7 4"/></g>`,
@@ -181,6 +228,70 @@ function schematicSvg(recs: Recommendation[], mode: Mode): string {
   }
 
   return `<svg viewBox="0 0 300 200" aria-hidden="true">${parts.join("")}</svg>`;
+}
+
+// ---------- esquemático da lupa de trecho ----------
+
+const LX0 = 24, LX1 = 276, LY = 56; // reta da corrida (viewBox 300×120)
+
+function lineSchematicSvg(
+  sel: LineSignal,
+  siblings: LineSignal[],
+  existing: { arc_m: number; type: string }[],
+  lengthM: number,
+): string {
+  const px = (arc: number) =>
+    LX0 + (LX1 - LX0) * Math.min(Math.max(arc / lengthM, 0), 1);
+  const parts: string[] = [];
+
+  // a corrida inteira, com o fluxo animado da esquerda para a direita
+  parts.push(`<path class="strack" d="M${LX0} ${LY} L${LX1} ${LY}"/>`);
+  parts.push(`<path class="strackin" d="M${LX0} ${LY} L${LX1} ${LY}"/>`);
+  parts.push(`<path class="sflow" d="M${LX0} ${LY} L${LX1} ${LY}"/>`);
+  // as pontas são junções (sinalizadas na lista de junções)
+  parts.push(`<circle class="sjun" cx="${LX0}" cy="${LY}" r="5"/>`);
+  parts.push(`<circle class="sjun" cx="${LX1}" cy="${LY}" r="5"/>`);
+  // escala
+  parts.push(`<text class="slbl" x="${LX0}" y="${LY + 18}" text-anchor="start">0</text>`);
+  parts.push(`<text class="slbl" x="${LX1}" y="${LY + 18}" text-anchor="end">${t("lens.line.scaleEnd")(Math.round(lengthM))}</text>`);
+
+  // sinais que o jogador já tem na corrida — fronteiras de bloco respeitadas
+  for (const e of existing) {
+    const x = px(e.arc_m).toFixed(1);
+    const lamp = e.type === "Path" ? "slampP" : "slampB";
+    parts.push(
+      `<g class="sig sig-exist" transform="translate(${x} ${LY})">` +
+      `<line class="spost" x1="0" y1="-8" x2="0" y2="-22"/>` +
+      `<circle class="${lamp}" cy="-26" r="4"/></g>`,
+    );
+  }
+
+  // sugeridos desta corrida — losango âmbar; o selecionado ganha o anel
+  for (const s of siblings) {
+    const x = px(s.arc_m).toFixed(1);
+    const isSel = s.id === sel.id;
+    parts.push(
+      `<g class="sig sline${isSel ? " sel" : ""}" transform="translate(${x} ${LY})">` +
+      (isSel ? `<circle class="sline-ring" cy="-16" r="11"/>` : "") +
+      `<line class="spost" x1="0" y1="-6" x2="0" y2="-10"/>` +
+      `<rect class="sline-d" x="-5" y="-21" width="10" height="10" transform="rotate(45 0 -16)"/></g>`,
+    );
+  }
+
+  // cota do bloco fechado pelo sinal selecionado (da fronteira anterior até ele)
+  const a = px(sel.arc_m - sel.block_m), b = px(sel.arc_m);
+  parts.push(`<line class="sdim" x1="${a.toFixed(1)}" y1="${LY + 28}" x2="${b.toFixed(1)}" y2="${LY + 28}"/>`);
+  parts.push(`<text class="sdimt" x="${((a + b) / 2).toFixed(1)}" y="${LY + 40}" text-anchor="middle">${t("lens.line.dim")(fmtM(Math.round(sel.block_m)))}</text>`);
+
+  return `<svg viewBox="0 0 300 120" aria-hidden="true">${parts.join("")}</svg>`;
+}
+
+function lineLegendHtml(hasExisting: boolean): string {
+  const rows = [`<span><i class="lb"></i>${t("lens.line.legend.new")}</span>`];
+  if (hasExisting) {
+    rows.push(`<span><i class="le"></i>${t("lens.line.legend.existing")}</span>`);
+  }
+  return `<div class="jp-leg">${rows.join("")}</div>`;
 }
 
 // ---------- textos ----------
@@ -230,6 +341,15 @@ function stepsHtml(
   }
   void junction;
   return `<ol class="jp-steps">${steps.join("")}</ol>`;
+}
+
+/** Auditoria contra os sinais existentes: quantos desta junção já estão
+ * resolvidos e quantos pedem revisão de tipo. */
+function auditNoteHtml(recs: Recommendation[]): string {
+  const ok = recs.filter((r) => r.status === "ok").length;
+  const retype = recs.filter((r) => r.status === "retype").length;
+  if (ok === 0 && retype === 0) return "";
+  return `<p class="jp-note audit">${t("lens.note.audit")(ok, retype)}</p>`;
 }
 
 function notesHtml(

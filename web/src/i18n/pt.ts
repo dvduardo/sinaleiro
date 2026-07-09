@@ -75,6 +75,15 @@ export const pt = {
   "results.stat.suspectJunctions": "junções suspeitas",
   "results.stat.inferredHand": "mão inferida",
   "results.stat.ambiguous": "ambíguos",
+  "results.stat.missing": "faltando",
+  "results.stat.retype": "rever tipo",
+  "results.stat.okDone": "já ok",
+  "results.stat.lineSignals": "sinais de linha",
+  "results.trains.label": "Trens por linha",
+  "results.trains.aria": "Quantos trens cada corrida de mão única deve comportar",
+  "results.trains.inSave": (n: number) => n === 1 ? "1 trem no save" : `${n} trens no save`,
+  "results.legend.lineSignal": "Sinal de linha sugerido (Trecho)",
+  "results.legend.passingHint": "Dica de desvio (bidirecional longo)",
 
   // sidebar.ts
   "sidebar.title": "Plano de instalação",
@@ -89,6 +98,22 @@ export const pt = {
   "sidebar.facing.entry": "virado para a junção",
   "sidebar.facing.exit": "virado para fora",
   "sidebar.bidirectionalSuffix": " (trecho bidirecional)",
+  "sidebar.filterAria": "Filtrar recomendações por estado",
+  "sidebar.filter.all": "Todos",
+  "sidebar.filter.missing": "➕ Faltando",
+  "sidebar.filter.retype": "⚠ Revisar",
+  "sidebar.filter.ok": "✓ Ok",
+  "sidebar.status.missing": "falta sinal neste braço",
+  "sidebar.status.retype": (current: string, suggested: string) =>
+    `você tem ${current} aqui; considere ${suggested} — pode ser intencional`,
+  "sidebar.status.ok": "você já tem este sinal — nada a fazer",
+  "sidebar.lineGroup": (n: number) => `Sinais de linha (${n})`,
+  "sidebar.lineRow": (run: number) => `Sinal de Trecho · corrida ${run}`,
+  "sidebar.lineRowDetail": (block: number, arc: number) =>
+    `bloco resultante ~${block} m · a ${arc} m do início da corrida`,
+  "sidebar.hintGroup": (n: number) => `Dicas de desvio (${n})`,
+  "sidebar.hintRow": (m: number) =>
+    `Trecho bidirecional de ${m} m — para cruzar trens, considere um desvio (passing loop); não subdivida em blocos`,
 
   // lens.ts
   "lens.aria": "Lupa de junção",
@@ -122,11 +147,32 @@ export const pt = {
     ? "Um braço desta junção é uma linha inacabada (cinza no mapa) e não recebeu recomendação — conecte a linha e reanalise."
     : `${n} braços desta junção são linhas inacabadas (cinza no mapa) e não receberam recomendação — conecte a linha e reanalise.`,
   "lens.note.rightHand": "Regra que o site já resolve por você: no jogo, um sinal só vale para o trem que passa por ele à direita — por isso cada lado do trilho tem o seu.",
+  "lens.note.audit": (ok: number, retype: number) => {
+    const parts: string[] = [];
+    if (ok > 0) parts.push(`✓ ${ok} ${ok === 1 ? "sinal já está" : "sinais já estão"} no lugar (esmaecidos no esquema)`);
+    if (retype > 0) parts.push(`⚠ ${retype} ${retype === 1 ? "é de outro tipo — revise" : "são de outro tipo — revise"} (pode ser intencional)`);
+    return parts.join(" · ") + ".";
+  },
+
+  // lens.ts — lupa de trecho (sinais de linha)
+  "lens.line.aria": "Lupa de trecho",
+  "lens.line.title": (length: number) => `Sinal de linha · corrida de ${length} m`,
+  "lens.line.dim": (m: string) => `bloco ≈ ${m} m`,
+  "lens.line.scaleEnd": (m: number) => `${m} m`,
+  "lens.line.legend.new": "Losango âmbar — Sinal de Trecho sugerido nesta corrida (o selecionado ganha o anel)",
+  "lens.line.legend.existing": "Poste esmaecido — sinal que você já tem na corrida; ele já delimita um bloco e foi respeitado",
+  "lens.line.step.where": (arc: number) => `<b>Onde:</b> vá até a coordenada acima — ≈${arc} m depois do início da corrida, contando no sentido do fluxo.`,
+  "lens.line.step.type": "<b>Tipo:</b> use um <b>Sinal de Trecho</b> (Block) — em linha corrida nunca use Trajeto.",
+  "lens.line.step.side": "<b>Lado:</b> de pé no trilho olhando no sentido do fluxo (pontilhado animado), o sinal vai à sua <b>direita</b>.",
+  "lens.line.note.block": (block: number, target: number) => `Este sinal fecha um bloco de ≈${block} m — é o que deixa a corrida comportar ${target} trens em fila sem colisão.`,
+  "lens.line.note.ends": "As pontas da corrida são junções: os sinais delas estão na lista de junções e não aparecem aqui.",
 
   // mapView.ts
   "map.stationTitle": (name: string) => name,
   "map.existingSignal.path": "Sinal existente (Trajeto)",
   "map.existingSignal.block": "Sinal existente (Trecho)",
+  "map.lineSignal": (block: number) => `Sinal de linha sugerido (Trecho) — bloco ~${block} m`,
+  "map.passingHint": (m: number) => `Trecho bidirecional de ${m} m — considere um desvio (passing loop)`,
 
   // compass (identidade em PT)
   "compass": {
@@ -159,6 +205,20 @@ export const pt = {
     `Entrada ${dir} da junção ${label} (${degree} trilhos se encontram). Coloque virado PARA a junção.`,
   "report.reason.exit": (dir: string, label: string) =>
     `Saída ${dir} da junção ${label} — fecha o bloco da junção e o libera assim que o trem sai. Coloque no mesmo ponto, virado PARA FORA da junção.`,
+  "report.header.audit": (missing: number, retype: number, ok: number) =>
+    `Auditoria dos sinais que você já tem: ${missing} realmente faltando · ${retype} rever tipo · ${ok} já resolvidos`,
+  "report.status.ok": (name: string) => ` JÁ RESOLVIDO: você já tem um ${name} aqui.`,
+  "report.status.retype": (current: string, suggested: string, why: string) =>
+    ` REVISAR: você já tem um ${current} aqui; considere trocar por ${suggested} — ${why}. Pode ser intencional.`,
+  "report.status.whyPath": "um Sinal de Trajeto na entrada da junção evita travamento (deadlock)",
+  "report.status.whyBlock": "um Sinal de Trecho na saída basta e libera o bloco mais rápido",
+  "report.lineHeader": (target: number) =>
+    `SINAIS DE LINHA — preenchimento de lacunas (alvo: ${target} trens por corrida):`,
+  "report.lineNone": "  Nenhum necessário: os blocos existentes já comportam o alvo.",
+  "report.lineRow": (i: number, run: number, x: number, y: number, z: number, arc: number, block: number) =>
+    `  ${String(i).padStart(3, " ")}. [Sinal de Trecho (Block) · corrida ${run}] X=${x} Y=${y} Z=${z} (a ${arc}m do início; bloco resultante ~${block}m)`,
+  "report.hintLine": (m: number, x: number, y: number) =>
+    `  DICA: trecho bidirecional de ${m}m em X=${x} Y=${y} — para cruzar trens em sentidos opostos, considere um desvio (passing loop) ou via dupla; não subdivida em blocos.`,
   "report.reason.ambiguousSuffix": " ATENÇÃO: direção deste trilho não pôde ser inferida — tratado como bidirecional; confira o traçado.",
   "report.reason.biConfirmedSuffix": " Trecho bidirecional (via única obrigatória): recebe o par completo de sinais.",
   "report.reason.biAssumedSuffix": " Trecho sem evidência de mão — tratado como bidirecional; o par completo é a opção segura.",

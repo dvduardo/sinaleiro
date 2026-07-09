@@ -60,11 +60,11 @@ export function onProgress(handler: ProgressHandler): void {
   progressHandler = handler;
 }
 
-export async function analyze(file: File, mode: Mode): Promise<AnalysisResult> {
+export async function analyze(file: File, mode: Mode, trainsTarget?: number): Promise<AnalysisResult> {
   const buf = await file.arrayBuffer();
-  return send({ type: "analyze", save: buf, fileName: file.name, mode }, [buf]);
+  return send({ type: "analyze", save: buf, fileName: file.name, mode, trainsTarget }, [buf]);
 }
 
-export function reanalyze(mode: Mode): Promise<AnalysisResult> {
-  return send({ type: "reanalyze", mode });
+export function reanalyze(mode: Mode, trainsTarget?: number): Promise<AnalysisResult> {
+  return send({ type: "reanalyze", mode, trainsTarget });
 }

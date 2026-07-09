@@ -1,8 +1,12 @@
-/** Espelha o payload v2 de src/web_api.py — coordenadas em cm de mundo
+/** Espelha o payload v3 de src/web_api.py — coordenadas em cm de mundo
  * (as mesmas que o jogador vê no jogo); +X = leste, +Y = sul. */
 
 export type Mode = "mixed" | "bidirectional" | "oneway";
 export type SignalType = "Path" | "Block";
+/** Auditoria contra os sinais que o save já tem (coverage.py): "missing" =
+ * braço vazio, coloque; "ok" = o tipo recomendado já está lá, nada a fazer;
+ * "retype" = há sinal de outro tipo, revise (pode ser intencional). */
+export type AuditStatus = "missing" | "ok" | "retype";
 /** Classificação por trilho do modo misto (classify.py): mão única,
  * bidirecional confirmado (ponte no grafo), bidirecional presumido
  * (sem evidência — par completo por segurança) ou linha inacabada. */
@@ -13,10 +17,22 @@ export interface Stats {
   junctions: number;
   stations: number;
   existing_signals: number;
+  existing_path: number;
+  existing_block: number;
   recommendations: number;
   path: number;
   block: number;
   ambiguous: number;
+  /** Auditoria dos sinais existentes: contagens por estado. */
+  missing: number;
+  retype: number;
+  ok: number;
+  /** Nº de composições (trens) no save. */
+  trains: number;
+  /** Alvo de trens por corrida usado no gap-fill de sinais de linha. */
+  trains_target: number;
+  line_signals: number;
+  passing_loop_hints: number;
   directions_total?: number;
   directions_known?: number;
   inconsistent_junctions?: number;
@@ -86,10 +102,49 @@ export interface Recommendation {
   /** Só no modo misto: classificação do trilho desta aproximação
    * (nunca "stub" — braços inacabados não geram recomendação). */
   track_kind?: TrackKind;
+  status: AuditStatus;
+  /** Tipo do sinal que já existe no braço (quando status ≠ "missing"). */
+  current_type: SignalType | null;
+}
+
+/** Sinal de Trecho sugerido ao longo de uma corrida de mão única para que
+ * ela comporte `stats.trains_target` trens (line_signals.py). */
+export interface LineSignal {
+  id: number;
+  /** Índice da corrida (cadeia de trilhos mão única) a que pertence. */
+  run: number;
+  x: number;
+  y: number;
+  z: number;
+  /** Rumo do trem no ponto do sinal (0 = norte, horário); o poste fica à
+   * perpendicular-direita desse rumo. */
+  facing_deg: number;
+  /** Distância desde o início da corrida, em metros. */
+  arc_m: number;
+  /** Comprimento do bloco resultante, em metros. */
+  block_m: number;
+  reason: string;
+}
+
+/** Metadados de uma corrida de mão única que recebeu sinais de linha —
+ * suficientes para a lupa de trecho desenhar a corrida como uma reta com as
+ * marcas de bloco (existentes + sugeridas). */
+export interface LineRun {
+  run: number;
+  length_m: number;
+  existing: { arc_m: number; type: SignalType }[];
+}
+
+/** Trecho bidirecional longo: não subdividir em blocos — considerar um
+ * desvio (passing loop) no ponto indicado. */
+export interface PassingLoopHint {
+  x: number;
+  y: number;
+  length_m: number;
 }
 
 export interface AnalysisPayload {
-  version: 2;
+  version: 3;
   mode: Mode;
   stats: Stats;
   tracks: TrackGeom[];
@@ -99,5 +154,9 @@ export interface AnalysisPayload {
   existing_signals: ExistingSignal[];
   junctions: Junction[];
   recommendations: Recommendation[];
+  line_signals: LineSignal[];
+  passing_loop_hints: PassingLoopHint[];
+  /** Opcional para tolerar payloads v3 em cache gerados antes deste campo. */
+  line_runs?: LineRun[];
   text_report: string;
 }

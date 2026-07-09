@@ -133,6 +133,10 @@
 .strack.assumed { stroke-dasharray: 12 8; }
 .sjun { fill: var(--acc); stroke: #12100D; stroke-width: 2; }
 .spost { stroke: #D8CFC0; stroke-width: 1.6; }
+/* auditoria: sinal já existente esmaecido; tipo divergente destacado */
+.sig-ok { opacity: .32; }
+.sig-retype .spost { stroke: #FFB020; stroke-width: 2.2; }
+.jp-note.audit { border-left-color: #3FBF8F; }
 .slampP { fill: var(--path); }
 .slampB { fill: var(--block); }
 .schev { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
@@ -151,3 +155,9 @@
 }
 @keyframes flow { to { stroke-dashoffset: -12; } }
 @media (prefers-reduced-motion: reduce) { .sflow { animation: none; } }
+
+/* lupa de trecho: sinais existentes esmaecidos, sugeridos em losango âmbar */
+.sig-exist { opacity: .5; }
+.sline-d { fill: var(--block); stroke: #12100D; stroke-width: 1; }
+.sline-ring { fill: none; stroke: var(--acc-hi); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.jp-leg i.le { background: #A79E8A; opacity: .6; }

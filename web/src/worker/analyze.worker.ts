@@ -51,7 +51,8 @@ function errorMessage(err: unknown): string {
   return lines[lines.length - 1].slice(0, 500);
 }
 
-async function runAnalyze(py: PyodideInterface, mode: string, saveBytes?: Uint8Array) {
+async function runAnalyze(py: PyodideInterface, mode: string, trainsTarget: number | undefined,
+  saveBytes?: Uint8Array) {
   const t0 = performance.now();
   if (saveBytes) {
     progress("read");
@@ -59,7 +60,10 @@ async function runAnalyze(py: PyodideInterface, mode: string, saveBytes?: Uint8A
     py.runPython("web_api.load_save(save_bytes.to_py(), progress=js_progress); del save_bytes");
   }
   py.globals.set("mode", mode);
-  const json = py.runPython("web_api.analyze(mode, progress=js_progress)") as string;
+  py.globals.set("trains_target", trainsTarget ?? null);
+  const json = py.runPython(
+    "web_api.analyze(mode, trains_target if trains_target is not None else web_api.DEFAULT_TRAINS_TARGET, progress=js_progress)",
+  ) as string;
   post({ type: "result", payload: JSON.parse(json), elapsedMs: performance.now() - t0 });
 }
 
@@ -80,9 +84,9 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   }
   try {
     if (msg.type === "analyze") {
-      await runAnalyze(py, msg.mode, new Uint8Array(msg.save));
+      await runAnalyze(py, msg.mode, msg.trainsTarget, new Uint8Array(msg.save));
     } else {
-      await runAnalyze(py, msg.mode);
+      await runAnalyze(py, msg.mode, msg.trainsTarget);
     }
   } catch (err) {
     post({ type: "error", code: errorCode(err), message: errorMessage(err) });

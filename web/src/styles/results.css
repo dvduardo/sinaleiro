@@ -52,6 +52,55 @@
 .rchip.warn { border-color: var(--bad); color: #F0B7AC; }
 .rchip.warn b { color: var(--bad); }
 
+/* auditoria: ➕ falta (laranja forte) · ⚠ revisar (âmbar) · ✓ ok (verde discreto) */
+.rchip.st-missing { border-color: #FF6A2B; }
+.rchip.st-missing b { color: #FF6A2B; }
+.rchip.st-retype { border-color: #FFB020; }
+.rchip.st-retype b { color: #FFB020; }
+.rchip.st-ok { border-color: rgba(63, 191, 143, .55); }
+.rchip.st-ok b { color: #3FBF8F; }
+
+/* controle "trens por linha" */
+.rtrains {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #3A3E44;
+  border-radius: 5px;
+  padding: 4px 10px;
+}
+.rtrains.hidden { display: none; }
+.rtrains span {
+  font-family: var(--disp);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: .62rem;
+  color: #9B968B;
+}
+.rtrains b {
+  font-family: var(--disp);
+  font-weight: 700;
+  font-size: .95rem;
+  color: var(--acc-hi);
+  min-width: 1.4ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.rtrains button {
+  background: none;
+  border: 1px solid #3A3E44;
+  border-radius: 3px;
+  color: #C9C4B9;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  cursor: pointer;
+  font-size: .8rem;
+  padding: 0;
+}
+.rtrains button:hover:not(:disabled) { border-color: var(--acc); color: var(--acc-hi); }
+.rtrains button:disabled { opacity: .35; cursor: default; }
+
 .rtop .spacer { flex: 1; }
 
 .rmode {
@@ -119,9 +168,11 @@
   border-radius: 50%;
   margin-right: 6px;
 }
-/* chips de legenda exclusivos do modo misto */
-.legend .mixedonly { display: none; }
+/* chips de legenda exclusivos do modo misto / com sinais de linha / dicas */
+.legend .mixedonly, .legend .lineonly, .legend .hintonly { display: none; }
 .legend.mixed .mixedonly { display: inline-block; }
+.legend.lines .lineonly { display: inline-block; }
+.legend.hints .hintonly { display: inline-block; }
 
 .reanalyzing {
   position: absolute;
@@ -162,7 +213,20 @@
   stroke-width: 3px;
   font-weight: 700;
 }
-.jpin.warn .jc { fill: var(--bad); }
+/* pino colorido pelo pior estado da auditoria na junção: numa malha já
+   sinalizada quase tudo fica verde e o mapa descansa */
+.jpin.st-ok .jc { fill: #2E8F6B; }
+.jpin.st-retype .jc { fill: #FFB020; }
+.jpin.st-missing .jc { fill: #FF6A2B; }
+.jpin.warn .jl { fill: #FFC9B8; }
+/* filtro por estado: esmaece o que não bate */
+.mk.dim { opacity: .18; }
+/* sinal de linha sugerido (losango âmbar) e dica de desvio */
+.mk.linemk { cursor: pointer; }
+.linemk rect { fill: #FFB020; stroke: #14100C; stroke-width: 1.4; }
+.linemk:hover rect, .linemk.on rect { fill: #FFD9B0; }
+.hintmk circle { fill: #14312A; stroke: #3FBF8F; stroke-width: 1.6; }
+.hintmk text { font-family: var(--mono); font-size: 11px; fill: #9FE8CB; font-weight: 700; }
 .jpin .jring { fill: none; stroke: var(--acc); stroke-width: 1.5; opacity: 0; }
 .jpin.on .jring { opacity: 1; animation: jpulse 1.4s ease-in-out infinite; }
 @keyframes jpulse { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: .2; } }
@@ -238,7 +302,7 @@
 .jgroup summary:hover { color: var(--acc-hi); }
 .jgroup summary .gcnt { margin-left: auto; font-family: var(--mono); text-transform: none; letter-spacing: 0; color: #6E675C; }
 .jgroup.complete summary { color: var(--good); }
-.jgroup summary .lupa {
+.jgroup summary .lupa, .srow .lupa {
   background: none;
   border: 1px solid #3A2C1E;
   border-radius: 3px;
@@ -251,7 +315,8 @@
   cursor: pointer;
   flex: none;
 }
-.jgroup summary .lupa:hover { border-color: var(--acc); background: rgba(242, 123, 44, .1); }
+.jgroup summary .lupa:hover, .srow .lupa:hover { border-color: var(--acc); background: rgba(242, 123, 44, .1); }
+.srow .lupa { margin-left: auto; align-self: center; }
 
 .srow {
   display: flex;
@@ -276,3 +341,38 @@
 .srow .sw { font-size: .66rem; color: #8F887C; line-height: 1.5; }
 .srow .sco { font-family: var(--mono); font-size: .6rem; color: #6E675C; }
 .srow.amb { border-left: 3px solid #ff9f1c; }
+.srow.hidden, .jgroup.hidden { display: none; }
+/* estados da auditoria na lista */
+.srow.st-ok { opacity: .55; }
+.srow.st-ok:hover { opacity: .85; }
+.srow.st-retype { border-left: 3px solid #FFB020; }
+.srow .sbadge {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  margin-top: 1px;
+  font-size: .76rem;
+}
+.srow .sbadge.ok { color: #3FBF8F; }
+.srow .sbadge.hint { color: #3FBF8F; }
+
+/* filtro por estado */
+.sbfilter { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+.sbfilter button {
+  background: none;
+  border: 1px solid #3A3E44;
+  border-radius: 3px;
+  color: #9B968B;
+  font-family: var(--disp);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: .6rem;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.sbfilter button em { font-style: normal; font-family: var(--mono); opacity: .75; }
+.sbfilter button:hover { border-color: var(--acc); color: var(--acc-hi); }
+.sbfilter button.on { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); font-weight: 700; }
+.sbfilter button.f-missing.on { background: #FF6A2B; border-color: #FF6A2B; }
+.sbfilter button.f-retype.on { background: #FFB020; border-color: #FFB020; }
+.sbfilter button.f-ok.on { background: #2E8F6B; border-color: #2E8F6B; color: #EAFBF3; }

@@ -12,8 +12,8 @@ export type Stage =
 
 export type WorkerRequest =
   | { type: "warmup" }
-  | { type: "analyze"; save: ArrayBuffer; fileName: string; mode: Mode }
-  | { type: "reanalyze"; mode: Mode };
+  | { type: "analyze"; save: ArrayBuffer; fileName: string; mode: Mode; trainsTarget?: number }
+  | { type: "reanalyze"; mode: Mode; trainsTarget?: number };
 
 export type ErrorCode = "invalid-save" | "no-rails" | "pyodide-load" | "internal";
 

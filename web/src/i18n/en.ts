@@ -74,6 +74,15 @@ export const en: Messages = {
   "results.stat.suspectJunctions": "suspect junctions",
   "results.stat.inferredHand": "direction inferred",
   "results.stat.ambiguous": "ambiguous",
+  "results.stat.missing": "missing",
+  "results.stat.retype": "review type",
+  "results.stat.okDone": "already ok",
+  "results.stat.lineSignals": "line signals",
+  "results.trains.label": "Trains per line",
+  "results.trains.aria": "How many trains each one-way run should hold",
+  "results.trains.inSave": (n: number) => n === 1 ? "1 train in the save" : `${n} trains in the save`,
+  "results.legend.lineSignal": "Suggested line signal (Block)",
+  "results.legend.passingHint": "Passing-loop hint (long bidirectional)",
 
   // sidebar.ts
   "sidebar.title": "Installation plan",
@@ -88,6 +97,22 @@ export const en: Messages = {
   "sidebar.facing.entry": "facing the junction",
   "sidebar.facing.exit": "facing outward",
   "sidebar.bidirectionalSuffix": " (bidirectional stretch)",
+  "sidebar.filterAria": "Filter recommendations by state",
+  "sidebar.filter.all": "All",
+  "sidebar.filter.missing": "➕ Missing",
+  "sidebar.filter.retype": "⚠ Review",
+  "sidebar.filter.ok": "✓ Ok",
+  "sidebar.status.missing": "this arm has no signal",
+  "sidebar.status.retype": (current: string, suggested: string) =>
+    `you have a ${current} here; consider a ${suggested} — may be intentional`,
+  "sidebar.status.ok": "you already have this signal — nothing to do",
+  "sidebar.lineGroup": (n: number) => `Line signals (${n})`,
+  "sidebar.lineRow": (run: number) => `Block Signal · run ${run}`,
+  "sidebar.lineRowDetail": (block: number, arc: number) =>
+    `resulting block ~${block} m · ${arc} m from the start of the run`,
+  "sidebar.hintGroup": (n: number) => `Passing-loop hints (${n})`,
+  "sidebar.hintRow": (m: number) =>
+    `Bidirectional stretch of ${m} m — to cross trains, consider a passing loop; do not split it into blocks`,
 
   // lens.ts
   "lens.aria": "Junction lens",
@@ -121,11 +146,32 @@ export const en: Messages = {
     ? "One arm of this junction is an unfinished line (gray on the map) and got no recommendation — connect the line and re-analyze."
     : `${n} arms of this junction are unfinished lines (gray on the map) and got no recommendation — connect the line and re-analyze.`,
   "lens.note.rightHand": "A rule the site already handles for you: in-game, a signal only applies to the train passing it on its right — that's why each side of the track has its own.",
+  "lens.note.audit": (ok: number, retype: number) => {
+    const parts: string[] = [];
+    if (ok > 0) parts.push(`✓ ${ok} ${ok === 1 ? "signal is" : "signals are"} already in place (dimmed in the schematic)`);
+    if (retype > 0) parts.push(`⚠ ${retype} ${retype === 1 ? "is" : "are"} of a different type — review (may be intentional)`);
+    return parts.join(" · ") + ".";
+  },
+
+  // lens.ts — stretch lens (line signals)
+  "lens.line.aria": "Stretch lens",
+  "lens.line.title": (length: number) => `Line signal · ${length} m run`,
+  "lens.line.dim": (m: string) => `block ≈ ${m} m`,
+  "lens.line.scaleEnd": (m: number) => `${m} m`,
+  "lens.line.legend.new": "Amber diamond — Block signal suggested on this run (the selected one gets the ring)",
+  "lens.line.legend.existing": "Dimmed post — signal you already have on the run; it already bounds a block and was respected",
+  "lens.line.step.where": (arc: number) => `<b>Where:</b> go to the coordinate above — ≈${arc} m past the start of the run, counting along the flow.`,
+  "lens.line.step.type": "<b>Type:</b> use a <b>Block signal</b> — never place a Path signal on open track.",
+  "lens.line.step.side": "<b>Side:</b> standing on the track facing the flow (animated dashes), the signal goes on your <b>right</b>.",
+  "lens.line.note.block": (block: number, target: number) => `This signal closes a ≈${block} m block — that's what lets the run hold ${target} trains in a row without collision.`,
+  "lens.line.note.ends": "The run's endpoints are junctions: their signals live in the junction list and are not shown here.",
 
   // mapView.ts
   "map.stationTitle": (name: string) => name,
   "map.existingSignal.path": "Existing signal (Path)",
   "map.existingSignal.block": "Existing signal (Block)",
+  "map.lineSignal": (block: number) => `Suggested line signal (Block) — block ~${block} m`,
+  "map.passingHint": (m: number) => `Bidirectional stretch of ${m} m — consider a passing loop`,
 
   // compass
   "compass": {
@@ -158,6 +204,20 @@ export const en: Messages = {
     `${dir} entry of junction ${label} (${degree} tracks meet). Place it facing TOWARD the junction.`,
   "report.reason.exit": (dir: string, label: string) =>
     `${dir} exit of junction ${label} — closes the junction block and releases it as soon as the train clears it. Place at the same point, facing OUTWARD from the junction.`,
+  "report.header.audit": (missing: number, retype: number, ok: number) =>
+    `Audit of the signals you already have: ${missing} actually missing · ${retype} review type · ${ok} already done`,
+  "report.status.ok": (name: string) => ` ALREADY DONE: you already have a ${name} here.`,
+  "report.status.retype": (current: string, suggested: string, why: string) =>
+    ` REVIEW: you already have a ${current} here; consider swapping to a ${suggested} — ${why}. May be intentional.`,
+  "report.status.whyPath": "a Path Signal at the junction entry prevents deadlocks",
+  "report.status.whyBlock": "a Block Signal at the exit is enough and releases the block sooner",
+  "report.lineHeader": (target: number) =>
+    `LINE SIGNALS — gap fill (target: ${target} trains per run):`,
+  "report.lineNone": "  None needed: the existing blocks already hold the target.",
+  "report.lineRow": (i: number, run: number, x: number, y: number, z: number, arc: number, block: number) =>
+    `  ${String(i).padStart(3, " ")}. [Block Signal · run ${run}] X=${x} Y=${y} Z=${z} (${arc}m from the start; resulting block ~${block}m)`,
+  "report.hintLine": (m: number, x: number, y: number) =>
+    `  HINT: bidirectional stretch of ${m}m at X=${x} Y=${y} — to cross trains running opposite ways, consider a passing loop or double track; do not split it into blocks.`,
   "report.reason.ambiguousSuffix": " NOTE: this track's direction could not be inferred — treated as bidirectional; check the layout.",
   "report.reason.biConfirmedSuffix": " Bidirectional stretch (single track is mandatory): gets the full signal pair.",
   "report.reason.biAssumedSuffix": " Track with no direction evidence — treated as bidirectional; the full pair is the safe choice.",

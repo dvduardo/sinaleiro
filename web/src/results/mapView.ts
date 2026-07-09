@@ -24,10 +24,13 @@ let labelScale = -1;
 let scale = 1, originX = 0, originY = 0, minScale = 0.001;
 let focus: [number, number, number, number] = [0, 0, MAP_SIZE, MAP_SIZE];
 let pinHandler: ((label: string) => void) | null = null;
+let lineHandler: ((id: number) => void) | null = null;
 
-export function mountMapView(vp: HTMLElement, onPinClick: (label: string) => void): void {
+export function mountMapView(vp: HTMLElement, onPinClick: (label: string) => void,
+  onLineClick?: (id: number) => void): void {
   viewport = vp;
   pinHandler = onPinClick;
+  lineHandler = onLineClick ?? null;
 
   svg = document.createElementNS(SVG_NS, "svg");
   svg.classList.add("map");
@@ -48,7 +51,7 @@ export function mountMapView(vp: HTMLElement, onPinClick: (label: string) => voi
   full.onload = () => img.setAttribute("href", full.src);
   full.src = `${base}map/map_full.jpg`;
 
-  for (const id of ["tracks", "flow", "stations", "existing", "pins"]) {
+  for (const id of ["tracks", "flow", "stations", "existing", "lines", "hints", "pins"]) {
     const g = document.createElementNS(SVG_NS, "g");
     g.id = `layer-${id}`;
     svg.appendChild(g);
@@ -63,8 +66,10 @@ export function renderMap(payload: AnalysisPayload): void {
   const flow = layer("flow");
   const stations = layer("stations");
   const existing = layer("existing");
+  const lines = layer("lines");
+  const hints = layer("hints");
   const pins = layer("pins");
-  for (const g of [tracks, flow, stations, existing, pins]) g.innerHTML = "";
+  for (const g of [tracks, flow, stations, existing, lines, hints, pins]) g.innerHTML = "";
   markers = [];
   stationLabels = [];
   pinBoxes = [];
@@ -132,13 +137,39 @@ export function renderMap(payload: AnalysisPayload): void {
       `<circle r="5"/><title>${escapeXml(s.type === "Path" ? t("map.existingSignal.path") : t("map.existingSignal.block"))}</title>`));
   }
 
-  // pinos de junção
+  // sinais de linha sugeridos (gap-fill) — losango âmbar, contam como
+  // "faltando"; clique abre a lupa de trecho
+  for (const s of payload.line_signals) {
+    const mk = marker(mapX(s.x), mapY(s.y), "mk linemk",
+      `<rect x="-5" y="-5" width="10" height="10" transform="rotate(45)"/>` +
+      `<title>${escapeXml(t("map.lineSignal")(Math.round(s.block_m)))}</title>`);
+    mk.dataset.st = "missing";
+    mk.dataset.lid = String(s.id);
+    mk.addEventListener("click", (e) => {
+      e.stopPropagation();
+      lineHandler?.(s.id);
+    });
+    lines.appendChild(mk);
+  }
+
+  // dicas de desvio (trecho bidirecional longo)
+  for (const h of payload.passing_loop_hints) {
+    hints.appendChild(marker(mapX(h.x), mapY(h.y), "mk hintmk",
+      `<circle r="9"/><text x="0" y="4" text-anchor="middle">⇆</text>` +
+      `<title>${escapeXml(t("map.passingHint")(h.length_m))}</title>`));
+  }
+
+  // pinos de junção — cor pelo pior estado da auditoria entre as
+  // recomendações da junção (falta > revisar > ok): numa malha já
+  // sinalizada o mapa fica quase todo verde, calmo
   for (const j of payload.junctions) {
     const warn = j.degree >= 4;
-    const mk = marker(mapX(j.x), mapY(j.y), `mk jpin${warn ? " warn" : ""}`,
+    const status = junctionStatus(payload, j);
+    const mk = marker(mapX(j.x), mapY(j.y), `mk jpin st-${status}${warn ? " warn" : ""}`,
       `<circle class="jring" r="17"/><circle class="jc" r="9"/>` +
       `<text class="jl" x="12" y="4">${j.label}${warn ? " ⚠" : ""}</text>`);
     mk.dataset.j = j.label;
+    mk.dataset.st = status;
     mk.addEventListener("click", (e) => {
       e.stopPropagation();
       pinHandler?.(j.label);
@@ -150,9 +181,35 @@ export function renderMap(payload: AnalysisPayload): void {
   fit();
 }
 
+/** Pior estado da auditoria entre as recomendações de uma junção. */
+function junctionStatus(payload: AnalysisPayload, j: Junction): "missing" | "retype" | "ok" {
+  let worst: "missing" | "retype" | "ok" = "ok";
+  for (const id of j.rec_ids) {
+    const st = payload.recommendations[id]?.status ?? "missing";
+    if (st === "missing") return "missing";
+    if (st === "retype") worst = "retype";
+  }
+  return worst;
+}
+
+/** Esmaece pinos e sinais de linha que não batem com o filtro de estado. */
+export function setStatusFilter(filter: "all" | "missing" | "retype" | "ok"): void {
+  for (const id of ["pins", "lines"]) {
+    layer(id).querySelectorAll<SVGGElement>(".mk").forEach((mk) => {
+      mk.classList.toggle("dim", filter !== "all" && mk.dataset.st !== filter);
+    });
+  }
+}
+
 export function setSelectedPin(label: string | null): void {
   layer("pins").querySelectorAll<SVGGElement>(".jpin").forEach((p) => {
     p.classList.toggle("on", p.dataset.j === label);
+  });
+}
+
+export function setSelectedLine(id: number | null): void {
+  layer("lines").querySelectorAll<SVGGElement>(".linemk").forEach((mk) => {
+    mk.classList.toggle("on", mk.dataset.lid === String(id));
   });
 }
 
